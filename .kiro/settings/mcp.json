@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "figma": {
+      "command": "uvx",
+      "args": ["figma-developer-mcp@latest"],
+      "env": {
+        "FASTMCP_LOG_LEVEL": "ERROR",
+        "FIGMA_API_KEY": "YOUR_FIGMA_API_TOKEN_HERE"
+      },
+      "disabled": false,
+      "autoApprove": []
+    }
+  }
+}
