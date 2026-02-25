@@ -77,10 +77,10 @@ const AdminDashboard: React.FC = () => {
       ]);
       
       setStats(statsData);
-      setUsers(Array.isArray(usersData) ? usersData : usersData.data || []);
+      setUsers(Array.isArray(usersData) ? usersData : usersData.users || usersData.data || []);
       setOpportunities(Array.isArray(oppsData) ? oppsData : oppsData.data || []);
       setCommunities(Array.isArray(commsData) ? commsData : commsData.data || []);
-      setReports(Array.isArray(reportsData) ? reportsData : reportsData.data || []);
+      setReports(Array.isArray(reportsData) ? reportsData : reportsData.reports || reportsData.data || []);
       setApplications([]);
       setCertificates([]);
     } catch (err: any) {

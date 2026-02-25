@@ -14,20 +14,29 @@ exports.getDashboardStats = async (req, res) => {
       totalUsers,
       totalCommunities,
       totalOpportunities,
+      totalApplications,
       pendingReports,
       pendingVerifications,
       activeEmergencies,
-      dailyActiveUsers
+      dailyActiveUsers,
+      totalHours
     ] = await Promise.all([
       User.countDocuments({ isActive: true }),
       Community.countDocuments({ isActive: true }),
       Opportunity.countDocuments({ status: 'published' }),
+      User.aggregate([
+        { $unwind: { path: '$applications', preserveNullAndEmptyArrays: true } },
+        { $group: { _id: null, count: { $sum: 1 } } }
+      ]).then(result => result[0]?.count || 0),
       Report.countDocuments({ status: 'pending' }),
       User.countDocuments({ organizationVerificationStatus: 'pending' }),
       EmergencyAlert.countDocuments({ isActive: true }),
       User.countDocuments({ 
         lastActive: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }
-      })
+      }),
+      User.aggregate([
+        { $group: { _id: null, total: { $sum: '$stats.totalHours' } } }
+      ]).then(result => result[0]?.total || 0)
     ]);
 
     // Calculate platform health metrics
@@ -39,6 +48,9 @@ exports.getDashboardStats = async (req, res) => {
       totalUsers,
       totalCommunities,
       totalOpportunities,
+      totalApplications,
+      totalHours,
+      activeUsers: dailyActiveUsers,
       pendingReports,
       pendingVerifications,
       activeEmergencies,
@@ -48,6 +60,7 @@ exports.getDashboardStats = async (req, res) => {
       errorRate
     });
   } catch (error) {
+    console.error('Stats error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };
