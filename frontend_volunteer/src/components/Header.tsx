@@ -25,7 +25,7 @@ interface HeaderProps {
 }
 
 const Header: React.FC<HeaderProps> = ({ currentView, onNavigate }) => {
-  const { user, isAuthenticated, signOut } = useAuth();
+  const { user, isAuthenticated, logout } = useAuth();
   const { language, setLanguage, t } = useLanguage();
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
@@ -41,15 +41,14 @@ const Header: React.FC<HeaderProps> = ({ currentView, onNavigate }) => {
 
   const userNavItems = user?.role === 'admin'
     ? [
-        { id: 'dashboard', label: t('nav.dashboard'), icon: BarChartIcon, link: '/admin-dashboard' },
-        { id: 'admin', label: t('nav.admin'), icon: ShieldCheckIcon, link: '/admin-dashboard' }
+        { id: 'admin-dashboard', label: 'Admin Panel', icon: ShieldCheckIcon, link: '/admin-dashboard' }
       ]
     : user?.role === 'organizer'
     ? [
-        { id: 'dashboard', label: t('nav.dashboard'), icon: BuildingIcon, link: '/organizer-dashboard' }
+        { id: 'organizer-dashboard', label: 'Dashboard', icon: BuildingIcon, link: '/organizer-dashboard' }
       ]
     : [
-        { id: 'impact', label: t('nav.impact'), icon: TrophyIcon, link: '/volunteer-dashboard' }
+        { id: 'volunteer-dashboard', label: 'My Impact', icon: TrophyIcon, link: '/volunteer-dashboard' }
       ];
 
   const notifications = [
@@ -147,8 +146,8 @@ const Header: React.FC<HeaderProps> = ({ currentView, onNavigate }) => {
                       className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
                     >
                       <img
-                        src={user?.avatar_url || `https://ui-avatars.com/api/?name=${user?.full_name}&background=3b82f6&color=fff`}
-                        alt={user?.full_name}
+                        src={`https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || 'User')}&background=3b82f6&color=fff`}
+                        alt={user?.name}
                         className="w-8 h-8 rounded-lg object-cover"
                       />
                       <ChevronDownIcon size={16} className="text-gray-400 hidden sm:block" />
@@ -157,7 +156,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, onNavigate }) => {
                     {showUserMenu && (
                       <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden">
                         <div className="p-4 border-b border-gray-100">
-                          <p className="font-semibold text-gray-900">{user?.full_name}</p>
+                          <p className="font-semibold text-gray-900">{user?.name}</p>
                           <p className="text-sm text-gray-500">{user?.email}</p>
                           <span className={`inline-block mt-2 px-2 py-1 text-xs font-medium rounded-full ${
                             user?.role === 'admin'
@@ -202,7 +201,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, onNavigate }) => {
                           </button>
                           <button
                             onClick={() => {
-                              signOut();
+                              logout();
                               setShowUserMenu(false);
                               onNavigate('home');
                             }}
