@@ -1,23 +1,24 @@
 // Dynamically determine API base URL based on current host
 const getApiBaseUrl = () => {
-  // If VITE_API_BASE_URL is set, use it
-  if (import.meta.env.VITE_API_BASE_URL) {
-    return import.meta.env.VITE_API_BASE_URL;
-  }
-  
-  // Otherwise, determine based on current window location
+  // Check if we should use environment variable (only for localhost)
+  const envUrl = import.meta.env.VITE_API_BASE_URL;
   const hostname = window.location.hostname;
   
-  // If accessing via network IP, use the same IP for API
+  // If accessing via network IP, ALWAYS use the network IP for API (ignore env var)
   if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
-    return `http://${hostname}:5000/api`;
+    const apiUrl = `http://${hostname}:5000/api`;
+    console.log('🌐 Network access detected. Using API URL:', apiUrl);
+    return apiUrl;
   }
   
-  // Default to localhost
-  return 'http://localhost:5000/api';
+  // For localhost, use env var if available, otherwise default
+  const apiUrl = envUrl || 'http://localhost:5000/api';
+  console.log('🏠 Local access detected. Using API URL:', apiUrl);
+  return apiUrl;
 };
 
 const API_BASE_URL = getApiBaseUrl();
+console.log('✅ API Base URL configured:', API_BASE_URL);
 
 // Generic API request function
 const apiRequest = async (endpoint: string, options: RequestInit = {}) => {
@@ -32,14 +33,27 @@ const apiRequest = async (endpoint: string, options: RequestInit = {}) => {
     ...options,
   };
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, config);
-  
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || 'API request failed');
+  const fullUrl = `${API_BASE_URL}${endpoint}`;
+  console.log(`📡 API Request: ${options.method || 'GET'} ${fullUrl}`);
+
+  try {
+    const response = await fetch(fullUrl, config);
+    
+    console.log(`📥 API Response: ${response.status} ${response.statusText}`);
+    
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ message: 'Request failed' }));
+      console.error('❌ API Error:', error);
+      throw new Error(error.message || 'API request failed');
+    }
+    
+    const data = await response.json();
+    console.log('✅ API Success:', data);
+    return data;
+  } catch (error: any) {
+    console.error('❌ Fetch Error:', error.message);
+    throw error;
   }
-  
-  return response.json();
 };
 
 // Auth API
