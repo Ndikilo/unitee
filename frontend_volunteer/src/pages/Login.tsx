@@ -23,8 +23,14 @@ const Login: React.FC = () => {
   React.useEffect(() => {
     clearAllStorageData();
     
+    // Dynamically determine API URL based on current host
+    const hostname = window.location.hostname;
+    const apiUrl = hostname !== 'localhost' && hostname !== '127.0.0.1'
+      ? `http://${hostname}:5000/api/admin/stats`
+      : 'http://localhost:5000/api/admin/stats';
+    
     // Fetch real stats from API
-    fetch('http://localhost:5000/api/admin/stats')
+    fetch(apiUrl)
       .then(res => res.json())
       .then(data => {
         setStats({

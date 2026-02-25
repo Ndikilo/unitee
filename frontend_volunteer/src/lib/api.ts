@@ -1,4 +1,23 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+// Dynamically determine API base URL based on current host
+const getApiBaseUrl = () => {
+  // If VITE_API_BASE_URL is set, use it
+  if (import.meta.env.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL;
+  }
+  
+  // Otherwise, determine based on current window location
+  const hostname = window.location.hostname;
+  
+  // If accessing via network IP, use the same IP for API
+  if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+    return `http://${hostname}:5000/api`;
+  }
+  
+  // Default to localhost
+  return 'http://localhost:5000/api';
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 // Generic API request function
 const apiRequest = async (endpoint: string, options: RequestInit = {}) => {
