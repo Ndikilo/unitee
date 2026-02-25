@@ -14,6 +14,7 @@ const Login: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [stats, setStats] = useState({ users: 0, opportunities: 0, communities: 0 });
   const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -21,6 +22,20 @@ const Login: React.FC = () => {
 
   React.useEffect(() => {
     clearAllStorageData();
+    
+    // Fetch real stats from API
+    fetch('http://localhost:5000/api/admin/stats')
+      .then(res => res.json())
+      .then(data => {
+        setStats({
+          users: data.totalUsers || 0,
+          opportunities: data.totalOpportunities || 0,
+          communities: data.totalCommunities || 0
+        });
+      })
+      .catch(() => {
+        // Keep zeros if API fails
+      });
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -71,27 +86,27 @@ const Login: React.FC = () => {
             Continue your journey of community impact and volunteer excellence
           </p>
 
-          {/* Stats */}
+          {/* Stats - Dynamic from API */}
           <div className="grid grid-cols-3 gap-6 mt-12">
             <div className="text-center">
               <div className="flex items-center justify-center w-16 h-16 bg-white/20 rounded-2xl mx-auto mb-3">
                 <Users className="text-white" size={28} />
               </div>
-              <div className="text-3xl font-bold text-white">10K+</div>
+              <div className="text-3xl font-bold text-white">{stats.users > 0 ? `${stats.users}+` : '...'}</div>
               <div className="text-sm text-blue-100">Volunteers</div>
             </div>
             <div className="text-center">
               <div className="flex items-center justify-center w-16 h-16 bg-white/20 rounded-2xl mx-auto mb-3">
                 <Heart className="text-white" size={28} />
               </div>
-              <div className="text-3xl font-bold text-white">500+</div>
+              <div className="text-3xl font-bold text-white">{stats.opportunities > 0 ? `${stats.opportunities}+` : '...'}</div>
               <div className="text-sm text-blue-100">Opportunities</div>
             </div>
             <div className="text-center">
               <div className="flex items-center justify-center w-16 h-16 bg-white/20 rounded-2xl mx-auto mb-3">
                 <Globe className="text-white" size={28} />
               </div>
-              <div className="text-3xl font-bold text-white">50+</div>
+              <div className="text-3xl font-bold text-white">{stats.communities > 0 ? `${stats.communities}+` : '...'}</div>
               <div className="text-sm text-blue-100">Communities</div>
             </div>
           </div>

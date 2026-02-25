@@ -75,7 +75,7 @@ const HeroSection: React.FC<HeroSectionProps> = ({ onGetStarted, onRegisterNGO }
       {/* Background */}
       <div className="absolute inset-0">
         <img
-          src="https://images.unsplash.com/photo-1559027615-cd4628902d4a?w=1920&q=80"
+          src="/placeholder.svg"
           alt="Volunteers working together"
           className="w-full h-full object-cover"
         />

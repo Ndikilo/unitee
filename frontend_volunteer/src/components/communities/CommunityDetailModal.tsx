@@ -34,22 +34,13 @@ const CommunityDetailModal: React.FC<CommunityDetailModalProps> = ({
 
   if (!community) return null;
 
-  const mockMessages = [
-    { id: 1, user: 'Marie N.', message: 'Welcome to all new members! Excited to have you here.', time: '2h ago', avatar: 'https://ui-avatars.com/api/?name=Marie+N&background=3b82f6&color=fff' },
-    { id: 2, user: 'Jean P.', message: 'Don\'t forget about our cleanup event this Saturday!', time: '3h ago', avatar: 'https://ui-avatars.com/api/?name=Jean+P&background=10b981&color=fff' },
-    { id: 3, user: 'Amina K.', message: 'I\'ll be there! Can we bring friends?', time: '3h ago', avatar: 'https://ui-avatars.com/api/?name=Amina+K&background=8b5cf6&color=fff' },
-    { id: 4, user: 'Paul M.', message: 'Yes, everyone is welcome! The more the merrier.', time: '4h ago', avatar: 'https://ui-avatars.com/api/?name=Paul+M&background=f59e0b&color=fff' }
-  ];
-
-  const mockEvents = [
-    { id: 1, title: 'Monthly Cleanup Drive', date: 'Jan 20, 2026', location: 'Central Park', attendees: 24 },
-    { id: 2, title: 'Community Meeting', date: 'Jan 25, 2026', location: 'Community Center', attendees: 45 },
-    { id: 3, title: 'Tree Planting Day', date: 'Feb 1, 2026', location: 'City Forest', attendees: 67 }
-  ];
+  // Messages and events will be fetched from API
+  const mockMessages: any[] = [];
+  const mockEvents: any[] = [];
 
   const handleSendMessage = () => {
     if (!chatMessage.trim()) return;
-    // In a real app, this would send to Supabase
+    // In a real app, this would send to backend API
     setChatMessage('');
   };
 
@@ -58,7 +49,7 @@ const CommunityDetailModal: React.FC<CommunityDetailModalProps> = ({
       {/* Header Image */}
       <div className="relative h-48">
         <img
-          src={community.image_url || 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=800'}
+          src={community.image_url || '/placeholder.svg'}
           alt={community.name}
           className="w-full h-full object-cover"
         />

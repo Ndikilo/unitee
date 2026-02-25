@@ -1,9 +1,32 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { GlobeIcon, UsersIcon, HeartIcon, TrophyIcon } from '@/components/icons/Icons';
+import { adminAPI } from '@/lib/api';
 
 const About: React.FC = () => {
   const { t } = useLanguage();
+  const [stats, setStats] = useState({
+    totalUsers: 0,
+    totalHours: 0,
+    totalOpportunities: 0,
+    totalCommunities: 0
+  });
+
+  useEffect(() => {
+    // Fetch real stats from API
+    adminAPI.getStats()
+      .then(data => {
+        setStats({
+          totalUsers: data.totalUsers || 0,
+          totalHours: data.totalHours || 0,
+          totalOpportunities: data.totalOpportunities || 0,
+          totalCommunities: data.totalCommunities || 0
+        });
+      })
+      .catch(() => {
+        // Keep zeros if API fails
+      });
+  }, []);
 
   const values = [
     {
@@ -92,19 +115,19 @@ const About: React.FC = () => {
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <span>Volunteers Connected</span>
-                  <span className="text-2xl font-bold">2,500+</span>
+                  <span className="text-2xl font-bold">{stats.totalUsers > 0 ? `${stats.totalUsers.toLocaleString()}+` : '...'}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span>Hours Contributed</span>
-                  <span className="text-2xl font-bold">15,000+</span>
+                  <span className="text-2xl font-bold">{stats.totalHours > 0 ? `${stats.totalHours.toLocaleString()}+` : '...'}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span>NGOs Supported</span>
-                  <span className="text-2xl font-bold">150+</span>
+                  <span>Opportunities Created</span>
+                  <span className="text-2xl font-bold">{stats.totalOpportunities > 0 ? `${stats.totalOpportunities.toLocaleString()}+` : '...'}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span>Communities Served</span>
-                  <span className="text-2xl font-bold">50+</span>
+                  <span className="text-2xl font-bold">{stats.totalCommunities > 0 ? `${stats.totalCommunities.toLocaleString()}+` : '...'}</span>
                 </div>
               </div>
             </div>

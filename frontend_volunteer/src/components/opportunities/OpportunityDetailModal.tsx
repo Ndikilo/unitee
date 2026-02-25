@@ -72,7 +72,7 @@ const OpportunityDetailModal: React.FC<OpportunityDetailModalProps> = ({
       {/* Hero Image */}
       <div className="relative h-64 sm:h-80">
         <img
-          src={opportunity.image_url || 'https://images.unsplash.com/photo-1559027615-cd4628902d4a?w=800'}
+          src={opportunity.image_url || '/placeholder.svg'}
           alt={opportunity.title}
           className="w-full h-full object-cover"
         />

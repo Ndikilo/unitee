@@ -85,7 +85,7 @@ const OpportunityCard: React.FC<OpportunityCardProps> = ({
       {/* Image */}
       <div className="relative h-48 overflow-hidden">
         <img
-          src={opportunity.image_url || 'https://images.unsplash.com/photo-1559027615-cd4628902d4a?w=800'}
+          src={opportunity.image_url || '/placeholder.svg'}
           alt={opportunity.title}
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
         />

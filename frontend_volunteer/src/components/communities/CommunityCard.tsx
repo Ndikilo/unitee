@@ -42,15 +42,8 @@ const CommunityCard: React.FC<CommunityCardProps> = ({
   };
 
   const getCommunityImage = () => {
-    const images = [
-      'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=800',
-      'https://images.unsplash.com/photo-1517486808906-6ca8b3f04846?w=800',
-      'https://images.unsplash.com/photo-1582213782179-e0d53f98f2ca?w=800',
-      'https://images.unsplash.com/photo-1491438590914-bc09fcaaf77a?w=800',
-      'https://images.unsplash.com/photo-1556761175-5973dc0f32e7?w=800'
-    ];
-    const index = community.name.length % images.length;
-    return community.image_url || images[index];
+    // Use community image if available, otherwise use placeholder
+    return community.image_url || '/placeholder.svg';
   };
 
   return (

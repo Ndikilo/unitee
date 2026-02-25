@@ -51,11 +51,8 @@ const Header: React.FC<HeaderProps> = ({ currentView, onNavigate }) => {
         { id: 'volunteer-dashboard', label: 'My Impact', icon: TrophyIcon, link: '/volunteer-dashboard' }
       ];
 
-  const notifications = [
-    { id: 1, title: 'Application Accepted', message: 'Your application for Beach Cleanup was accepted!', time: '2h ago', unread: true },
-    { id: 2, title: 'New Opportunity', message: 'A new event matches your interests in Douala', time: '5h ago', unread: true },
-    { id: 3, title: 'Badge Earned', message: 'You earned the "First Steps" badge!', time: '1d ago', unread: false }
-  ];
+  // Notifications will be fetched from API
+  const notifications: any[] = [];
 
   const openAuth = (mode: 'signin' | 'signup') => {
     // Navigate to login or register page instead of modal

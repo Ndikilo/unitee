@@ -250,24 +250,21 @@ const AdminDashboard: React.FC = () => {
     
     setLoadingSystemHealth(true);
     try {
-      // Simulate system health data (in production, this would come from backend)
+      // TODO: Replace with real backend endpoint when available
+      // For now, calculate from actual data
       const health = {
         timestamp: Date.now(),
-        uptime: Math.floor(Math.random() * 86400000), // Random uptime in ms
-        responseTime: Math.floor(Math.random() * 200) + 50, // 50-250ms
+        uptime: Date.now() - new Date(stats?.serverStartTime || Date.now()).getTime(),
+        responseTime: 0, // Will be calculated by backend
         activeUsers24h: users.filter(u => u.lastActive && Date.now() - new Date(u.lastActive).getTime() < 86400000).length,
-        databaseSize: '45.2 MB',
-        memoryUsage: Math.floor(Math.random() * 40) + 30, // 30-70%
-        cpuUsage: Math.floor(Math.random() * 30) + 10, // 10-40%
-        errorRate: (Math.random() * 2).toFixed(2), // 0-2%
-        requestsPerMinute: Math.floor(Math.random() * 100) + 50,
-        peakUsers: Math.max(...users.map(() => Math.floor(Math.random() * 50) + 10)),
-        avgSessionDuration: '12m 34s',
-        topPages: [
-          { page: '/opportunities', views: 1234 },
-          { page: '/communities', views: 892 },
-          { page: '/dashboard', views: 567 }
-        ]
+        databaseSize: 'N/A', // Backend will provide
+        memoryUsage: 0, // Backend will provide
+        cpuUsage: 0, // Backend will provide
+        errorRate: '0.00', // Backend will provide
+        requestsPerMinute: 0, // Backend will provide
+        peakUsers: users.length,
+        avgSessionDuration: 'N/A', // Backend will provide
+        topPages: [] // Backend will provide
       };
       setSystemHealth(health);
     } catch (err) {
