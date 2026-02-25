@@ -16,7 +16,6 @@ import Dashboard from "./pages/Dashboard";
 import OrganizerDashboard from "./pages/OrganizerDashboard";
 import OrganizerDashboardEnhanced from "./pages/OrganizerDashboardEnhanced";
 import AdminDashboard from "./pages/AdminDashboard";
-import AdminDashboardEnhanced from "./pages/AdminDashboardEnhanced";
 import RoleBasedDashboard from "./pages/RoleBasedDashboard";
 import NotFound from "./pages/NotFound";
 import AuthSuccess from "./pages/AuthSuccess";
@@ -62,7 +61,7 @@ const App = () => (
                   <Route path="/dashboard" element={<RoleBasedDashboard />} />
                   <Route path="/volunteer-dashboard" element={<Dashboard />} />
                   <Route path="/organizer-dashboard" element={<OrganizerDashboardEnhanced />} />
-                  <Route path="/admin-dashboard" element={<AdminDashboardEnhanced />} />
+                  <Route path="/admin-dashboard" element={<AdminDashboard />} />
                   <Route path="/auth/success" element={<AuthSuccess />} />
                   <Route path="/backend-test" element={<BackendLogin />} />
                   <Route path="*" element={<NotFound />} />

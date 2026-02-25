@@ -59,8 +59,12 @@ const Header: React.FC<HeaderProps> = ({ currentView, onNavigate }) => {
   ];
 
   const openAuth = (mode: 'signin' | 'signup') => {
-    setAuthMode(mode);
-    setShowAuthModal(true);
+    // Navigate to login or register page instead of modal
+    if (mode === 'signin') {
+      window.location.href = '/login';
+    } else {
+      window.location.href = '/register';
+    }
   };
 
   return (

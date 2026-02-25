@@ -81,14 +81,12 @@ const AppLayout: React.FC = () => {
     if (isAuthenticated) {
       handleNavigation('opportunities');
     } else {
-      setAuthMode('signup');
-      setShowAuthModal(true);
+      window.location.href = '/register';
     }
   };
 
   const handleRegisterNGO = () => {
-    setAuthMode('signup');
-    setShowAuthModal(true);
+    window.location.href = '/register';
   };
 
   const handleCategoryClick = (category: string) => {
