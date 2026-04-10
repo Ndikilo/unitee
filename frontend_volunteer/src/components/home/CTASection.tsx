@@ -8,7 +8,7 @@ interface CTASectionProps {
 
 const CTASection: React.FC<CTASectionProps> = ({ onGetStarted, onRegisterNGO }) => {
   return (
-    <section className="py-20 bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 relative overflow-hidden">
+    <section className="py-20 bg-gradient-to-br from-orange-500 via-orange-600 to-blue-700 relative overflow-hidden">
       {/* Background Pattern */}
       <div className="absolute inset-0 opacity-10">
         <div className="absolute inset-0" style={{
@@ -24,7 +24,7 @@ const CTASection: React.FC<CTASectionProps> = ({ onGetStarted, onRegisterNGO }) 
       <div className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
         {/* Icon */}
         <div className="inline-flex items-center justify-center w-20 h-20 bg-white/10 backdrop-blur-sm rounded-3xl mb-8">
-          <GlobeIcon size={40} className="text-white" />
+          <img src="/logo.png" alt="UNITEE" className="h-14 w-14 object-contain" />
         </div>
 
         {/* Heading */}
@@ -34,14 +34,14 @@ const CTASection: React.FC<CTASectionProps> = ({ onGetStarted, onRegisterNGO }) 
 
         {/* Subheading */}
         <p className="text-xl text-blue-100 mb-10 max-w-2xl mx-auto">
-          Join over 12,500 volunteers and 350 organizations transforming communities across Cameroon. Your journey starts here.
+          Join a growing movement of volunteers and organizations transforming communities across Cameroon. Your journey starts here.
         </p>
 
         {/* CTA Buttons */}
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
           <button
             onClick={onGetStarted}
-            className="group w-full sm:w-auto px-8 py-4 bg-white text-blue-700 font-semibold rounded-xl hover:bg-blue-50 transition-all shadow-lg flex items-center justify-center gap-2"
+            className="group w-full sm:w-auto px-8 py-4 bg-white text-orange-600 font-semibold rounded-xl hover:bg-orange-50 transition-all shadow-lg flex items-center justify-center gap-2"
           >
             Start Volunteering Today
             <ChevronRightIcon size={20} className="group-hover:translate-x-1 transition-transform" />

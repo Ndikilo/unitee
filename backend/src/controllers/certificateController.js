@@ -4,6 +4,7 @@ const Opportunity = require('../models/Opportunity');
 const asyncHandler = require('../middleware/async');
 const ErrorResponse = require('../utils/errorResponse');
 const PDFDocument = require('pdfkit');
+const QRCode = require('qrcode');
 const fs = require('fs');
 const path = require('path');
 
@@ -268,14 +269,14 @@ exports.getCertificateStats = asyncHandler(async (req, res, next) => {
   });
 });
 
-// Helper function to generate PDF certificate
+// Helper function to generate top-notch PDF certificate
 async function generateCertificatePDF(certificate) {
-  return new Promise((resolve, reject) => {
+  return new Promise(async (resolve, reject) => {
     try {
       const doc = new PDFDocument({
         size: 'A4',
         layout: 'landscape',
-        margins: { top: 50, bottom: 50, left: 50, right: 50 }
+        margins: { top: 40, bottom: 40, left: 40, right: 40 }
       });
 
       const buffers = [];
@@ -285,95 +286,213 @@ async function generateCertificatePDF(certificate) {
         resolve(pdfData);
       });
 
-      // Certificate design
       const pageWidth = doc.page.width;
       const pageHeight = doc.page.height;
+      const centerX = pageWidth / 2;
 
-      // Background and border
-      doc.rect(30, 30, pageWidth - 60, pageHeight - 60)
-         .stroke('#2563eb', 3);
+      // ===== BACKGROUND DESIGN =====
+      // Gradient-like effect with overlapping rectangles
+      doc.rect(0, 0, pageWidth, pageHeight).fill('#f8fafc');
+      
+      // Decorative corner elements
+      doc.save();
+      doc.fillColor('#3b82f6').opacity(0.1);
+      doc.circle(50, 50, 100).fill();
+      doc.circle(pageWidth - 50, 50, 100).fill();
+      doc.circle(50, pageHeight - 50, 100).fill();
+      doc.circle(pageWidth - 50, pageHeight - 50, 100).fill();
+      doc.restore();
 
-      doc.rect(50, 50, pageWidth - 100, pageHeight - 100)
-         .stroke('#e5e7eb', 1);
+      // Main border with gradient effect
+      doc.lineWidth(8);
+      doc.strokeColor('#3b82f6').opacity(0.8);
+      doc.roundedRect(30, 30, pageWidth - 60, pageHeight - 60, 15).stroke();
+      
+      doc.lineWidth(3);
+      doc.strokeColor('#60a5fa').opacity(0.6);
+      doc.roundedRect(40, 40, pageWidth - 80, pageHeight - 80, 10).stroke();
 
-      // Header
-      doc.fontSize(32)
-         .fillColor('#1e40af')
-         .text('CERTIFICATE OF ACHIEVEMENT', 0, 100, { align: 'center' });
+      // Inner decorative border
+      doc.lineWidth(1);
+      doc.strokeColor('#93c5fd').opacity(0.4);
+      doc.roundedRect(50, 50, pageWidth - 100, pageHeight - 100, 8).stroke();
 
-      doc.fontSize(16)
-         .fillColor('#6b7280')
-         .text('UNITEE Volunteer Platform', 0, 140, { align: 'center' });
+      // ===== HEADER SECTION =====
+      // Logo placeholder (you can add actual logo here)
+      doc.save();
+      doc.fillColor('#3b82f6');
+      doc.fontSize(40).font('Helvetica-Bold');
+      doc.text('UNITEE', centerX - 80, 80, { width: 160, align: 'center' });
+      doc.restore();
 
-      // Main content
-      doc.fontSize(18)
-         .fillColor('#374151')
-         .text('This is to certify that', 0, 200, { align: 'center' });
+      // Subtitle
+      doc.fontSize(12).fillColor('#64748b').font('Helvetica');
+      doc.text('Volunteer Community Action Platform', 0, 125, { align: 'center' });
 
-      doc.fontSize(28)
-         .fillColor('#1f2937')
-         .text(certificate.recipientName, 0, 240, { align: 'center' });
+      // Decorative line under header
+      doc.moveTo(centerX - 150, 145).lineTo(centerX + 150, 145);
+      doc.strokeColor('#cbd5e1').lineWidth(2).stroke();
 
-      doc.fontSize(16)
-         .fillColor('#374151')
-         .text(`has successfully completed`, 0, 290, { align: 'center' });
+      // ===== CERTIFICATE TITLE =====
+      doc.fontSize(36).fillColor('#1e293b').font('Helvetica-Bold');
+      doc.text('CERTIFICATE', 0, 170, { align: 'center' });
+      
+      doc.fontSize(24).fillColor('#475569').font('Helvetica');
+      doc.text('OF ACHIEVEMENT', 0, 210, { align: 'center' });
 
-      doc.fontSize(22)
-         .fillColor('#1e40af')
-         .text(certificate.title, 0, 320, { align: 'center' });
+      // ===== MAIN CONTENT =====
+      // "This certifies that" text
+      doc.fontSize(14).fillColor('#64748b').font('Helvetica');
+      doc.text('This is to certify that', 0, 260, { align: 'center' });
 
+      // Recipient name with decorative underline
+      doc.fontSize(32).fillColor('#0f172a').font('Helvetica-Bold');
+      doc.text(certificate.recipientName, 0, 290, { align: 'center' });
+      
+      // Decorative underline for name
+      const nameWidth = doc.widthOfString(certificate.recipientName);
+      const nameX = centerX - (nameWidth / 2);
+      doc.moveTo(nameX, 330).lineTo(nameX + nameWidth, 330);
+      doc.strokeColor('#3b82f6').lineWidth(2).stroke();
+
+      // Achievement description
+      doc.fontSize(16).fillColor('#475569').font('Helvetica');
+      doc.text('has successfully completed', 0, 350, { align: 'center' });
+
+      // Certificate title with background
+      doc.save();
+      doc.roundedRect(centerX - 250, 380, 500, 50, 8);
+      doc.fillAndStroke('#eff6ff', '#3b82f6');
+      doc.restore();
+      
+      doc.fontSize(20).fillColor('#1e40af').font('Helvetica-Bold');
+      doc.text(certificate.title, centerX - 240, 395, { width: 480, align: 'center' });
+
+      // Opportunity title if exists
       if (certificate.opportunityTitle) {
-        doc.fontSize(14)
-           .fillColor('#6b7280')
-           .text(`Related to: ${certificate.opportunityTitle}`, 0, 360, { align: 'center' });
+        doc.fontSize(13).fillColor('#64748b').font('Helvetica-Oblique');
+        doc.text(`Related to: ${certificate.opportunityTitle}`, 0, 450, { align: 'center' });
       }
 
-      // Metrics
-      let yPos = 400;
+      // ===== METRICS SECTION =====
+      let metricsY = certificate.opportunityTitle ? 480 : 460;
+      
+      // Metrics background
+      doc.save();
+      doc.roundedRect(centerX - 300, metricsY, 600, 60, 8);
+      doc.fillColor('#f1f5f9');
+      doc.fill();
+      doc.restore();
+
+      // Display metrics in columns
+      const metricStartX = centerX - 250;
+      let metricX = metricStartX;
+      
       if (certificate.hoursCompleted > 0) {
-        doc.fontSize(14)
-           .fillColor('#374151')
-           .text(`Hours Completed: ${certificate.hoursCompleted}`, 0, yPos, { align: 'center' });
-        yPos += 25;
+        doc.fontSize(24).fillColor('#3b82f6').font('Helvetica-Bold');
+        doc.text(certificate.hoursCompleted.toString(), metricX, metricsY + 10, { width: 100, align: 'center' });
+        doc.fontSize(10).fillColor('#64748b').font('Helvetica');
+        doc.text('Hours Completed', metricX, metricsY + 40, { width: 100, align: 'center' });
+        metricX += 150;
       }
 
+      // Achievement level
+      doc.fontSize(18).fillColor('#f59e0b').font('Helvetica-Bold');
+      doc.text(certificate.achievementLevel.toUpperCase(), metricX, metricsY + 15, { width: 120, align: 'center' });
+      doc.fontSize(10).fillColor('#64748b').font('Helvetica');
+      doc.text('Achievement Level', metricX, metricsY + 40, { width: 120, align: 'center' });
+      metricX += 150;
+
+      // Skills count
       if (certificate.skillsAcquired && certificate.skillsAcquired.length > 0) {
-        doc.text(`Skills Acquired: ${certificate.skillsAcquired.join(', ')}`, 0, yPos, { align: 'center' });
-        yPos += 25;
+        doc.fontSize(24).fillColor('#10b981').font('Helvetica-Bold');
+        doc.text(certificate.skillsAcquired.length.toString(), metricX, metricsY + 10, { width: 100, align: 'center' });
+        doc.fontSize(10).fillColor('#64748b').font('Helvetica');
+        doc.text('Skills Acquired', metricX, metricsY + 40, { width: 100, align: 'center' });
       }
 
-      // Date and signature area
-      doc.fontSize(12)
-         .fillColor('#6b7280')
-         .text(`Issued on: ${certificate.issuedDate.toLocaleDateString()}`, 100, pageHeight - 150);
+      // Skills list if available
+      if (certificate.skillsAcquired && certificate.skillsAcquired.length > 0) {
+        const skillsY = metricsY + 75;
+        doc.fontSize(9).fillColor('#64748b').font('Helvetica');
+        doc.text('Skills: ' + certificate.skillsAcquired.join(' • '), 100, skillsY, { 
+          width: pageWidth - 200, 
+          align: 'center' 
+        });
+      }
 
-      doc.text(`Issued by: ${certificate.issuerName}`, 100, pageHeight - 130);
+      // ===== FOOTER SECTION =====
+      const footerY = pageHeight - 140;
 
-      // Certificate ID and verification
-      doc.fontSize(10)
-         .fillColor('#9ca3af')
-         .text(`Certificate ID: ${certificate.certificateId}`, 100, pageHeight - 100);
+      // Date and issuer info
+      doc.fontSize(11).fillColor('#475569').font('Helvetica');
+      doc.text('Issued on', 100, footerY);
+      doc.fontSize(13).fillColor('#0f172a').font('Helvetica-Bold');
+      doc.text(new Date(certificate.issuedDate).toLocaleDateString('en-US', { 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      }), 100, footerY + 18);
 
-      doc.text(`Verification URL: ${certificate.verificationUrl}`, 100, pageHeight - 85);
+      doc.fontSize(11).fillColor('#475569').font('Helvetica');
+      doc.text('Issued by', 100, footerY + 45);
+      doc.fontSize(13).fillColor('#0f172a').font('Helvetica-Bold');
+      doc.text(certificate.issuerName, 100, footerY + 63);
 
-      doc.text(`Verification Hash: ${certificate.verificationHash.substring(0, 32)}...`, 100, pageHeight - 70);
+      // Signature line
+      doc.moveTo(100, footerY + 90).lineTo(250, footerY + 90);
+      doc.strokeColor('#cbd5e1').lineWidth(1).stroke();
+      doc.fontSize(9).fillColor('#94a3b8').font('Helvetica');
+      doc.text('Authorized Signature', 100, footerY + 95);
 
-      // QR Code placeholder (you can integrate a QR code library here)
-      doc.rect(pageWidth - 150, pageHeight - 150, 100, 100)
-         .stroke('#e5e7eb');
+      // ===== QR CODE SECTION =====
+      try {
+        const qrCodeData = await QRCode.toDataURL(certificate.verificationUrl, {
+          width: 120,
+          margin: 1,
+          color: {
+            dark: '#1e293b',
+            light: '#ffffff'
+          }
+        });
+        
+        // QR Code background
+        doc.save();
+        doc.roundedRect(pageWidth - 180, footerY - 10, 140, 140, 8);
+        doc.fillAndStroke('#ffffff', '#e2e8f0');
+        doc.restore();
 
-      doc.fontSize(8)
-         .text('QR Code', pageWidth - 125, pageHeight - 95, { align: 'center' });
+        // Add QR code
+        doc.image(qrCodeData, pageWidth - 170, footerY, { width: 120, height: 120 });
+        
+        doc.fontSize(9).fillColor('#64748b').font('Helvetica');
+        doc.text('Scan to Verify', pageWidth - 170, footerY + 125, { width: 120, align: 'center' });
+      } catch (qrError) {
+        console.error('QR Code generation error:', qrError);
+      }
 
-      doc.text('Scan to verify', pageWidth - 135, pageHeight - 85, { align: 'center' });
+      // ===== CERTIFICATE ID AND VERIFICATION =====
+      doc.fontSize(8).fillColor('#94a3b8').font('Helvetica');
+      doc.text(`Certificate ID: ${certificate.certificateId}`, 100, pageHeight - 35);
+      doc.text(`Verification: ${certificate.verificationUrl}`, 100, pageHeight - 23);
 
-      // Watermark
-      doc.fontSize(60)
-         .fillColor('#f3f4f6')
-         .text('UNITEE', 0, pageHeight / 2 - 30, { 
-           align: 'center',
-           opacity: 0.1
-         });
+      // Security watermark
+      doc.save();
+      doc.fontSize(80).fillColor('#f1f5f9').font('Helvetica-Bold').opacity(0.05);
+      doc.text('VERIFIED', 0, pageHeight / 2 - 40, { 
+        align: 'center',
+        angle: -30
+      });
+      doc.restore();
+
+      // Decorative seal/badge
+      doc.save();
+      doc.circle(pageWidth - 100, 120, 40);
+      doc.fillAndStroke('#fef3c7', '#f59e0b');
+      doc.fontSize(10).fillColor('#92400e').font('Helvetica-Bold');
+      doc.text('VERIFIED', pageWidth - 130, 110, { width: 60, align: 'center' });
+      doc.text('AUTHENTIC', pageWidth - 130, 125, { width: 60, align: 'center' });
+      doc.restore();
 
       doc.end();
     } catch (error) {

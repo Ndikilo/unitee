@@ -1,20 +1,37 @@
 import React, { useState, useEffect } from 'react';
-import { adminAPI } from '@/lib/api';
+import { usePublicStats } from '@/hooks/useApi';
 
 const ImpactStats: React.FC = () => {
-  const [counts, setCounts] = useState({
-    volunteers: 0,
-    hours: 0,
-    events: 0,
-    communities: 0
-  });
-  const [targets, setTargets] = useState({
-    volunteers: 0,
-    hours: 0,
-    events: 0,
-    communities: 0
-  });
-  const [loading, setLoading] = useState(true);
+  const { data, isLoading: loading } = usePublicStats();
+  const [counts, setCounts] = useState({ volunteers: 0, hours: 0, events: 0, communities: 0 });
+
+  useEffect(() => {
+    if (!data) return;
+    const newTargets = {
+      volunteers: data.totalUsers || 0,
+      hours: data.totalVolunteerHours || 0,
+      events: data.totalOpportunities || 0,
+      communities: data.totalCommunities || 0,
+    };
+    if (Object.values(newTargets).every(v => v === 0)) {
+      setCounts(newTargets);
+      return;
+    }
+    const duration = 2000, steps = 60;
+    let step = 0;
+    const timer = setInterval(() => {
+      step++;
+      const easeOut = 1 - Math.pow(1 - step / steps, 3);
+      setCounts({
+        volunteers: Math.floor(newTargets.volunteers * easeOut),
+        hours: Math.floor(newTargets.hours * easeOut),
+        events: Math.floor(newTargets.events * easeOut),
+        communities: Math.floor(newTargets.communities * easeOut),
+      });
+      if (step >= steps) { clearInterval(timer); setCounts(newTargets); }
+    }, duration / steps);
+    return () => clearInterval(timer);
+  }, [data]);
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -57,38 +74,19 @@ const ImpactStats: React.FC = () => {
           return () => clearInterval(timer);
         }
       } catch (error) {
-        // Silently fail for unauthorized access - use demo stats
-        const demoTargets = {
-          volunteers: 1250,
-          hours: 15000,
-          events: 450,
-          communities: 85
-        };
-        setTargets(demoTargets);
-        
-        // Animate to demo numbers
-        const duration = 2000;
-        const steps = 60;
-        const interval = duration / steps;
-
-        let step = 0;
-        const timer = setInterval(() => {
-          step++;
-          const progress = step / steps;
-          const easeOut = 1 - Math.pow(1 - progress, 3);
-
-          setCounts({
-            volunteers: Math.floor(demoTargets.volunteers * easeOut),
-            hours: Math.floor(demoTargets.hours * easeOut),
-            events: Math.floor(demoTargets.events * easeOut),
-            communities: Math.floor(demoTargets.communities * easeOut)
-          });
-
-          if (step >= steps) {
-            clearInterval(timer);
-            setCounts(demoTargets);
-          }
-        }, interval);
+        // Silently fail for unauthorized access - show zeros
+        setTargets({
+          volunteers: 0,
+          hours: 0,
+          events: 0,
+          communities: 0
+        });
+        setCounts({
+          volunteers: 0,
+          hours: 0,
+          events: 0,
+          communities: 0
+        });
       } finally {
         setLoading(false);
       }
@@ -122,7 +120,7 @@ const ImpactStats: React.FC = () => {
 
   if (loading) {
     return (
-      <section className="py-16 bg-gray-900">
+      <section className="py-16 bg-gradient-to-r from-gray-900 via-blue-950 to-gray-900">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-8">
             {[...Array(4)].map((_, index) => (
@@ -138,7 +136,7 @@ const ImpactStats: React.FC = () => {
   }
 
   return (
-    <section className="py-16 bg-gray-900">
+    <section className="py-16 bg-gradient-to-r from-gray-900 via-blue-950 to-gray-900">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-8">
           {stats.map((stat, index) => (

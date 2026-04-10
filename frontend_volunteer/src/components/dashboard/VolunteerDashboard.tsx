@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/NewAuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { opportunityAPI } from '@/lib/api';
+import { opportunityAPI, badgeAPI } from '@/lib/api';
 import CertificateManager from '@/components/certificates/CertificateManager';
 import {
   ClockIcon,
@@ -30,19 +30,9 @@ const VolunteerDashboard: React.FC = () => {
   
   const [activeTab, setActiveTab] = useState<'overview' | 'applications' | 'badges' | 'certificates'>('overview');
   const [applications, setApplications] = useState<any[]>([]);
+  const [badges, setBadges] = useState<{ earned: any[], available: any[] }>({ earned: [], available: [] });
   const [loading, setLoading] = useState(false);
-
-  // Default badges data
-  const defaultBadges = [
-    { id: 1, name: 'First Steps', description: 'Completed first volunteer event', icon: '🎯', earned: true, date: 'Dec 15, 2025', progress: 0 },
-    { id: 2, name: 'Dedicated Helper', description: 'Completed 5 events', icon: '💪', earned: true, date: 'Jan 5, 2026', progress: 0 },
-    { id: 3, name: 'Time Giver', description: 'Logged 10+ hours', icon: '⏰', earned: true, date: 'Jan 8, 2026', progress: 0 },
-    { id: 4, name: 'Community Builder', description: 'Joined 3 communities', icon: '🏘️', earned: true, date: 'Jan 10, 2026', progress: 0 },
-    { id: 5, name: 'Skill Master', description: 'Added 5 skills', icon: '🌟', earned: true, date: 'Jan 12, 2026', progress: 0 },
-    { id: 6, name: 'Community Champion', description: 'Complete 10 events', icon: '🏆', earned: false, progress: 80, date: '' },
-    { id: 7, name: 'Hundred Hours Hero', description: 'Log 100 hours', icon: '💯', earned: false, progress: 45, date: '' },
-    { id: 8, name: 'Local Leader', description: 'Lead a community', icon: '👑', earned: false, progress: 0, date: '' }
-  ];
+  const [badgesLoading, setBadgesLoading] = useState(false);
 
   const impactStats = [
     { label: t('impact.hours'), value: user?.stats?.totalHours || 0, icon: ClockIcon, color: 'bg-blue-500' },
@@ -64,8 +54,21 @@ const VolunteerDashboard: React.FC = () => {
       }
     };
 
+    const loadBadges = async () => {
+      try {
+        setBadgesLoading(true);
+        const data = await badgeAPI.getMyBadges();
+        setBadges(data || { earned: [], available: [] });
+      } catch (error) {
+        console.error('Failed to load badges:', error);
+      } finally {
+        setBadgesLoading(false);
+      }
+    };
+
     if (user) {
       loadApplications();
+      loadBadges();
     }
   }, [user]);
 
@@ -225,34 +228,79 @@ const VolunteerDashboard: React.FC = () => {
           )}
 
           {activeTab === 'badges' && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {defaultBadges.map((badge) => (
-                <div
-                  key={badge.id}
-                  className={`p-4 rounded-xl text-center transition-all ${
-                    badge.earned
-                      ? 'bg-gradient-to-br from-amber-50 to-orange-50 border-2 border-amber-200'
-                      : 'bg-gray-50 border-2 border-gray-100 opacity-60'
-                  }`}
-                >
-                  <div className="text-4xl mb-2">{badge.icon}</div>
-                  <p className="font-semibold text-gray-900 text-sm mb-1">{badge.name}</p>
-                  <p className="text-xs text-gray-500 mb-2">{badge.description}</p>
-                  {badge.earned ? (
-                    <p className="text-xs text-amber-600 font-medium">{badge.date}</p>
-                  ) : (
-                    <div className="mt-2">
-                      <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-blue-500 rounded-full"
-                          style={{ width: `${badge.progress}%` }}
-                        />
+            <div>
+              {badgesLoading ? (
+                <div className="text-center py-12">
+                  <p className="text-gray-600">Loading badges...</p>
+                </div>
+              ) : (
+                <>
+                  {/* Earned Badges */}
+                  {badges.earned.length > 0 && (
+                    <div className="mb-8">
+                      <h3 className="text-lg font-semibold text-gray-900 mb-4">Earned Badges ({badges.earned.length})</h3>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        {badges.earned.map((badge: any) => (
+                          <div
+                            key={badge._id}
+                            className="p-4 rounded-xl text-center bg-gradient-to-br from-amber-50 to-orange-50 border-2 border-amber-200"
+                          >
+                            <div className="text-4xl mb-2">{badge.icon}</div>
+                            <p className="font-semibold text-gray-900 text-sm mb-1">{badge.name}</p>
+                            <p className="text-xs text-gray-500 mb-2">{badge.description}</p>
+                            <div className="flex justify-center gap-1 mb-2">
+                              <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-xs rounded-full">{badge.tier}</span>
+                              <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full">{badge.points} pts</span>
+                            </div>
+                            <p className="text-xs text-amber-600 font-medium">
+                              {badge.earnedAt ? new Date(badge.earnedAt).toLocaleDateString() : 'Earned'}
+                            </p>
+                          </div>
+                        ))}
                       </div>
-                      <p className="text-xs text-gray-400 mt-1">{badge.progress}%</p>
                     </div>
                   )}
-                </div>
-              ))}
+
+                  {/* Available Badges */}
+                  {badges.available.length > 0 && (
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900 mb-4">Available Badges ({badges.available.length})</h3>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        {badges.available.map((badge: any) => (
+                          <div
+                            key={badge._id}
+                            className="p-4 rounded-xl text-center bg-gray-50 border-2 border-gray-100 opacity-60 hover:opacity-100 transition-opacity"
+                          >
+                            <div className="text-4xl mb-2 grayscale">{badge.icon}</div>
+                            <p className="font-semibold text-gray-900 text-sm mb-1">{badge.name}</p>
+                            <p className="text-xs text-gray-500 mb-2">{badge.description}</p>
+                            <div className="flex justify-center gap-1 mb-3">
+                              <span className="px-2 py-0.5 bg-gray-200 text-gray-600 text-xs rounded-full">{badge.tier}</span>
+                              <span className="px-2 py-0.5 bg-gray-200 text-gray-600 text-xs rounded-full">{badge.points} pts</span>
+                            </div>
+                            <div className="mt-2">
+                              <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                                <div
+                                  className="h-full bg-blue-500 rounded-full transition-all"
+                                  style={{ width: `${badge.progress || 0}%` }}
+                                />
+                              </div>
+                              <p className="text-xs text-gray-400 mt-1">{badge.progress || 0}% complete</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {badges.earned.length === 0 && badges.available.length === 0 && (
+                    <div className="text-center py-12">
+                      <TrophyIcon size={48} className="mx-auto text-gray-300 mb-4" />
+                      <p className="text-gray-600">No badges available yet</p>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           )}
 

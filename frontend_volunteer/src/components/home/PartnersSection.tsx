@@ -1,31 +1,30 @@
 import React from 'react';
 
-const PartnersSection: React.FC = () => {
-  const partners = [
-    { name: 'UNICEF Cameroon', logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/ed/Logo_of_UNICEF.svg/200px-Logo_of_UNICEF.svg.png' },
-    { name: 'Red Cross', logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/1a/Flag_of_the_Red_Cross.svg/200px-Flag_of_the_Red_Cross.svg.png' },
-    { name: 'World Vision', logo: 'https://upload.wikimedia.org/wikipedia/en/thumb/0/0f/World_Vision_logo.svg/200px-World_Vision_logo.svg.png' },
-    { name: 'UN Volunteers', logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/2/2f/UN_emblem_blue.svg/200px-UN_emblem_blue.svg.png' },
-    { name: 'Peace Corps', logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/8e/US-PeaceCorps-Logo.svg/200px-US-PeaceCorps-Logo.svg.png' }
-  ];
+// Using text-based partner logos to avoid broken external image links
+const PARTNERS = [
+  { name: 'UNICEF', color: 'text-blue-600' },
+  { name: 'Red Cross', color: 'text-red-600' },
+  { name: 'World Vision', color: 'text-blue-800' },
+  { name: 'UN Volunteers', color: 'text-sky-700' },
+  { name: 'Peace Corps', color: 'text-blue-700' },
+  { name: 'GIZ Cameroon', color: 'text-green-700' },
+];
 
+const PartnersSection: React.FC = () => {
   return (
     <section className="py-16 bg-white border-t border-gray-100">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-10">
-          <p className="text-gray-500 text-sm font-medium uppercase tracking-wider">
-            Trusted by leading organizations
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center justify-center gap-12 opacity-60 grayscale hover:grayscale-0 hover:opacity-100 transition-all duration-500">
-          {partners.map((partner, index) => (
-            <div key={index} className="flex items-center justify-center h-12">
-              <img
-                src={partner.logo}
-                alt={partner.name}
-                className="h-full w-auto object-contain"
-              />
-            </div>
+        <p className="text-center text-xs font-semibold text-gray-400 uppercase tracking-widest mb-10">
+          Trusted by leading organizations
+        </p>
+        <div className="flex flex-wrap items-center justify-center gap-x-12 gap-y-6">
+          {PARTNERS.map((p) => (
+            <span
+              key={p.name}
+              className={`text-lg font-bold ${p.color} opacity-40 hover:opacity-80 transition-opacity cursor-default select-none`}
+            >
+              {p.name}
+            </span>
           ))}
         </div>
       </div>

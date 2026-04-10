@@ -67,10 +67,8 @@ const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
           {/* Brand */}
           <div className="col-span-2 md:col-span-1">
             <div className="flex items-center gap-2 mb-4">
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-emerald-500 rounded-xl flex items-center justify-center">
-                <GlobeIcon className="text-white" size={22} />
-              </div>
-              <span className="text-xl font-bold">UNITEE</span>
+              <img src="/logo.png" alt="UNITEE" className="h-10 w-10 object-contain" />
+              <span className="text-xl font-bold"><span className="text-orange-400">UNI</span><span className="text-blue-400">TEE</span></span>
             </div>
             <p className="text-gray-400 text-sm mb-4">
               Connecting volunteers with meaningful opportunities to transform communities across Cameroon and beyond.

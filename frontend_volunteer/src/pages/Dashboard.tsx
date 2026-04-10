@@ -1,9 +1,13 @@
 import React from 'react';
-import { Navigate } from 'react-router-dom';
+import DashboardLayout from '@/components/DashboardLayout';
+import VolunteerDashboard from '@/components/dashboard/VolunteerDashboard';
 
 const Dashboard: React.FC = () => {
-  // Redirect to main app with dashboard view
-  return <Navigate to="/?view=dashboard" replace />;
+  return (
+    <DashboardLayout>
+      <VolunteerDashboard />
+    </DashboardLayout>
+  );
 };
 
 export default Dashboard;

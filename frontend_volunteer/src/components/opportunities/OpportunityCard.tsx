@@ -85,7 +85,17 @@ const OpportunityCard: React.FC<OpportunityCardProps> = ({
       {/* Image */}
       <div className="relative h-48 overflow-hidden">
         <img
-          src={opportunity.image_url || '/placeholder.svg'}
+          src={opportunity.image_url || (() => {
+            const fallbacks: Record<string, string> = {
+              'Environment': 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?w=400&q=70&auto=format&fit=crop',
+              'Education': 'https://images.unsplash.com/photo-1503676260728-1c00da094a0b?w=400&q=70&auto=format&fit=crop',
+              'Healthcare': 'https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=400&q=70&auto=format&fit=crop',
+              'Humanitarian': 'https://images.unsplash.com/photo-1532629345422-7515f3d16bb6?w=400&q=70&auto=format&fit=crop',
+              'Social Services': 'https://images.unsplash.com/photo-1509099836639-18ba1795216d?w=400&q=70&auto=format&fit=crop',
+              'Economic Development': 'https://images.unsplash.com/photo-1556761175-5973dc0f32e7?w=400&q=70&auto=format&fit=crop',
+            };
+            return fallbacks[opportunity.category] || 'https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?w=400&q=70&auto=format&fit=crop';
+          })()}
           alt={opportunity.title}
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
         />

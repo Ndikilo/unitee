@@ -52,6 +52,12 @@ const userSchema = new mongoose.Schema({
   organizationName: String,
   organizationDescription: String,
   organizationWebsite: String,
+  organizationType: String,
+  organizationPhone: String,
+  organizationCity: String,
+  organizationRegion: String,
+  organizationLogo: String,
+  organizationBanner: String,
   organizationVerificationStatus: {
     type: String,
     enum: ['pending', 'verified', 'rejected'],

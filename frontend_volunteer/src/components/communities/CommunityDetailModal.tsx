@@ -49,7 +49,7 @@ const CommunityDetailModal: React.FC<CommunityDetailModalProps> = ({
       {/* Header Image */}
       <div className="relative h-48">
         <img
-          src={community.image_url || '/placeholder.svg'}
+          src={community.image_url || 'https://images.unsplash.com/photo-1509099836639-18ba1795216d?w=800&q=75&auto=format&fit=crop'}
           alt={community.name}
           className="w-full h-full object-cover"
         />

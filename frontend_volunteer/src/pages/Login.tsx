@@ -23,13 +23,7 @@ const Login: React.FC = () => {
   React.useEffect(() => {
     clearAllStorageData();
     
-    // Dynamically determine API URL based on current host
-    const hostname = window.location.hostname;
-    const apiUrl = hostname !== 'localhost' && hostname !== '127.0.0.1'
-      ? `http://${hostname}:5000/api/admin/stats`
-      : 'http://localhost:5000/api/admin/stats';
-    
-    // Fetch real stats from API
+    const apiUrl = `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'}/setup/public-stats`;
     fetch(apiUrl)
       .then(res => res.json())
       .then(data => {
@@ -51,11 +45,11 @@ const Login: React.FC = () => {
 
     try {
       const response = await login({ email, password });
-      
-      // Redirect based on user role
-      if (response.role === 'admin') {
+      // Redirect based on userType (new schema) with role fallback
+      const type = response.userType || response.role;
+      if (type === 'admin') {
         navigate('/admin-dashboard');
-      } else if (response.role === 'organizer') {
+      } else if (type === 'organization' || type === 'organizer') {
         navigate('/organizer-dashboard');
       } else {
         navigate('/volunteer-dashboard');
@@ -79,9 +73,7 @@ const Login: React.FC = () => {
 
         <div className="relative z-10">
           <div className="flex items-center gap-3 mb-8">
-            <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center">
-              <Globe className="text-blue-600" size={28} />
-            </div>
+            <img src="/logo.png" alt="UNITEE" className="h-14 w-14 object-contain" />
             <span className="text-3xl font-bold text-white">UNITEE</span>
           </div>
           
@@ -110,7 +102,7 @@ const Login: React.FC = () => {
             </div>
             <div className="text-center">
               <div className="flex items-center justify-center w-16 h-16 bg-white/20 rounded-2xl mx-auto mb-3">
-                <Globe className="text-white" size={28} />
+                <img src="/logo.png" alt="" className="h-8 w-8 object-contain mx-auto mb-3" />
               </div>
               <div className="text-3xl font-bold text-white">{stats.communities > 0 ? `${stats.communities}+` : '...'}</div>
               <div className="text-sm text-blue-100">Communities</div>
@@ -128,12 +120,8 @@ const Login: React.FC = () => {
         <div className="w-full max-w-md">
           {/* Mobile Logo */}
           <div className="lg:hidden flex items-center justify-center gap-3 mb-8">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-emerald-500 rounded-xl flex items-center justify-center">
-              <Globe className="text-white" size={22} />
-            </div>
-            <span className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-emerald-500 bg-clip-text text-transparent">
-              UNITEE
-            </span>
+            <img src="/logo.png" alt="UNITEE" className="h-10 w-10 object-contain" />
+            <span className="text-2xl font-bold"><span className="text-orange-500">UNI</span><span className="text-blue-600">TEE</span></span>
           </div>
 
           <div className="bg-white rounded-2xl shadow-xl p-8">
@@ -192,6 +180,7 @@ const Login: React.FC = () => {
                     className="pl-10 pr-10 h-12 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
                     placeholder="••••••••"
                     required
+                    autoComplete="current-password"
                   />
                   <button
                     type="button"
@@ -211,7 +200,7 @@ const Login: React.FC = () => {
 
               <Button
                 type="submit"
-                className="w-full h-12 bg-gradient-to-r from-blue-600 to-emerald-600 hover:from-blue-700 hover:to-emerald-700 text-white font-medium text-base"
+                className="w-full h-12 bg-gradient-to-r from-orange-500 to-blue-600 hover:from-orange-600 hover:to-blue-700 text-white font-medium text-base"
                 disabled={loading}
               >
                 {loading ? (
@@ -236,7 +225,7 @@ const Login: React.FC = () => {
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
-                    <Button type="button" variant="outline" className="h-12 border-gray-300 hover:bg-gray-50" onClick={() => window.location.href = 'http://localhost:5000/api/auth/google'}>
+                    <Button type="button" variant="outline" className="h-12 border-gray-300 hover:bg-gray-50" onClick={() => window.location.href = `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'}/auth/google`}>
                       <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">
                         <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
                         <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>

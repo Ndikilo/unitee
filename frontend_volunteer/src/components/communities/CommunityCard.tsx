@@ -42,8 +42,15 @@ const CommunityCard: React.FC<CommunityCardProps> = ({
   };
 
   const getCommunityImage = () => {
-    // Use community image if available, otherwise use placeholder
-    return community.image_url || '/placeholder.svg';
+    if (community.image_url) return community.image_url;
+    // Category-appropriate Unsplash fallbacks
+    const fallbacks: Record<string, string> = {
+      'Environment': 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?w=400&q=70&auto=format&fit=crop',
+      'Education': 'https://images.unsplash.com/photo-1503676260728-1c00da094a0b?w=400&q=70&auto=format&fit=crop',
+      'Healthcare': 'https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=400&q=70&auto=format&fit=crop',
+      'Humanitarian': 'https://www.bing.com/images/search?view=detailV2&ccid=%2fTx2vavn&id=9FAD7E032176DE41DC8944A8A85B6EF34FB5F95E&thid=OIP._Tx2vavnYWHSz2jHmbMPeAHaE7&mediaurl=https%3a%2f%2fwww.un.org%2fruleoflaw%2fwp-content%2fuploads%2f2015%2f04%2fhumanitarian.jpg&cdnurl=https%3a%2f%2fth.bing.com%2fth%2fid%2fR.fd3c76bdabe76161d2cf68c799b30f78%3frik%3dXvm1T%252fNuW6ioRA%26pid%3dImgRaw%26r%3d0&exph=775&expw=1163&q=humanitarian+services&FORM=IRPRST&ck=B58D7B59B2ABDEF9B199886C5ACC92CB&selectedIndex=0&itb=0',
+    };
+    return fallbacks[community.category] || 'https://images.unsplash.com/photo-1509099836639-18ba1795216d?w=400&q=70&auto=format&fit=crop';
   };
 
   return (

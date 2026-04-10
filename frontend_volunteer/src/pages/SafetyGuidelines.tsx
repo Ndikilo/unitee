@@ -51,7 +51,6 @@ const SafetyGuidelines: React.FC = () => {
   ];
 
   const emergencyContacts = [
-    { service: 'UNITEE Emergency Support', contact: '+237 123 456 789', available: '24/7' },
     { service: 'Cameroon Police', contact: '117', available: '24/7' },
     { service: 'Medical Emergency', contact: '119', available: '24/7' },
     { service: 'Fire Department', contact: '118', available: '24/7' }

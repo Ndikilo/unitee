@@ -1,4 +1,6 @@
-const User = require('../models/User');
+const Volunteer = require('../models/Volunteer');
+const Organization = require('../models/Organization');
+const AdminModel = require('../models/Admin');
 const Community = require('../models/Community');
 const Opportunity = require('../models/Opportunity');
 const Report = require('../models/Report');
@@ -11,53 +13,42 @@ const Notification = require('../models/Notification');
 exports.getDashboardStats = async (req, res) => {
   try {
     const [
-      totalUsers,
+      totalVolunteers,
+      totalOrganizations,
       totalCommunities,
       totalOpportunities,
-      totalApplications,
       pendingReports,
       pendingVerifications,
       activeEmergencies,
-      dailyActiveUsers,
+      dailyActiveVolunteers,
       totalHours
     ] = await Promise.all([
-      User.countDocuments({ isActive: true }),
+      Volunteer.countDocuments({ isActive: true }),
+      Organization.countDocuments({ isActive: true }),
       Community.countDocuments({ isActive: true }),
       Opportunity.countDocuments({ status: 'published' }),
-      User.aggregate([
-        { $unwind: { path: '$applications', preserveNullAndEmptyArrays: true } },
-        { $group: { _id: null, count: { $sum: 1 } } }
-      ]).then(result => result[0]?.count || 0),
       Report.countDocuments({ status: 'pending' }),
-      User.countDocuments({ organizationVerificationStatus: 'pending' }),
+      Organization.countDocuments({ 'verification.status': 'pending' }),
       EmergencyAlert.countDocuments({ isActive: true }),
-      User.countDocuments({ 
-        lastActive: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }
-      }),
-      User.aggregate([
-        { $group: { _id: null, total: { $sum: '$stats.totalHours' } } }
-      ]).then(result => result[0]?.total || 0)
+      Volunteer.countDocuments({ lastActive: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } }),
+      Volunteer.aggregate([{ $group: { _id: null, total: { $sum: '$stats.totalHours' } } }]).then(r => r[0]?.total || 0),
     ]);
 
-    // Calculate platform health metrics
-    const uptime = 99.9; // This would typically come from monitoring service
-    const avgResponse = 45; // This would typically come from monitoring service
-    const errorRate = 0.1; // This would typically come from error tracking service
-
     res.json({
-      totalUsers,
+      totalUsers: totalVolunteers + totalOrganizations,
+      totalVolunteers,
+      totalOrganizations,
       totalCommunities,
       totalOpportunities,
-      totalApplications,
+      totalApplications: 0,
       totalHours,
-      activeUsers: dailyActiveUsers,
+      activeUsers: dailyActiveVolunteers,
       pendingReports,
       pendingVerifications,
       activeEmergencies,
-      uptime,
-      avgResponse,
-      dailyActive: dailyActiveUsers,
-      errorRate
+      uptime: 99.9,
+      avgResponse: 45,
+      errorRate: 0.1,
     });
   } catch (error) {
     console.error('Stats error:', error);
@@ -65,60 +56,71 @@ exports.getDashboardStats = async (req, res) => {
   }
 };
 
-// @desc    Get all users
+// @desc    Get all users (volunteers + organizations)
 // @route   GET /api/admin/users
 // @access  Private/Admin
 exports.getUsers = async (req, res) => {
   try {
     const { page = 1, limit = 10, search, role, status } = req.query;
-    
-    let query = {};
-    if (search) {
-      query.$or = [
-        { name: new RegExp(search, 'i') },
-        { email: new RegExp(search, 'i') }
-      ];
-    }
-    if (role) query.role = role;
-    if (status) query.isActive = status === 'active';
 
-    const users = await User.find(query)
-      .select('-password')
-      .sort({ createdAt: -1 })
-      .limit(limit * 1)
-      .skip((page - 1) * limit);
-      
-    const total = await User.countDocuments(query);
+    // Fetch volunteers
+    let volQuery = {};
+    if (search) volQuery.$or = [{ name: new RegExp(search, 'i') }, { email: new RegExp(search, 'i') }];
+    if (status === 'active') volQuery.isActive = true;
+    if (status === 'suspended') volQuery.isActive = false;
 
-    res.json({
-      users,
-      totalPages: Math.ceil(total / limit),
-      currentPage: page,
-      total
-    });
+    // Fetch organizations
+    let orgQuery = {};
+    if (search) orgQuery.$or = [{ 'account.name': new RegExp(search, 'i') }, { 'account.email': new RegExp(search, 'i') }, { 'organization.name': new RegExp(search, 'i') }];
+
+    let volunteers = [], organizations = [];
+    if (!role || role === 'user') volunteers = await Volunteer.find(volQuery).select('-password').lean();
+    if (!role || role === 'organizer') organizations = await Organization.find(orgQuery).select('-account.password').lean();
+
+    // Normalize for frontend
+    const normalized = [
+      ...volunteers.map(v => ({ ...v, role: 'user', displayName: v.name, displayEmail: v.email })),
+      ...organizations.map(o => ({ ...o, role: 'organizer', displayName: o.account?.name, displayEmail: o.account?.email, name: o.account?.name, email: o.account?.email })),
+    ];
+
+    const total = normalized.length;
+    const start = (page - 1) * limit;
+    const paginated = normalized.slice(start, start + Number(limit));
+
+    res.json({ users: paginated, total, totalPages: Math.ceil(total / limit), currentPage: Number(page) });
   } catch (error) {
+    console.error(error);
     res.status(500).json({ message: 'Server error' });
   }
 };
 
-// @desc    Update user status
+// @desc    Update user status (suspend/activate/verify)
 // @route   PUT /api/admin/users/:id/status
 // @access  Private/Admin
 exports.updateUserStatus = async (req, res) => {
   try {
-    const { isActive, isVerified } = req.body;
-    
-    const user = await User.findByIdAndUpdate(
-      req.params.id,
-      { isActive, isVerified },
-      { new: true }
-    ).select('-password');
-    
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+    const { isActive, isVerified, verificationStatus } = req.body;
+    const { id } = req.params;
+
+    // Try volunteer first
+    let user = await Volunteer.findById(id);
+    if (user) {
+      if (isActive !== undefined) user.isActive = isActive;
+      if (isVerified !== undefined) user.verification.isVerified = isVerified;
+      await user.save();
+      return res.json({ message: 'Updated', user });
     }
-    
-    res.json(user);
+
+    // Try organization
+    let org = await Organization.findById(id);
+    if (org) {
+      if (isActive !== undefined) org.isActive = isActive;
+      if (verificationStatus) org.verification.status = verificationStatus;
+      await org.save();
+      return res.json({ message: 'Updated', user: org });
+    }
+
+    res.status(404).json({ message: 'User not found' });
   } catch (error) {
     res.status(500).json({ message: 'Server error' });
   }

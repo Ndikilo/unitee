@@ -1,308 +1,350 @@
-const User = require('../models/User');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const nodemailer = require('nodemailer');
-const passport = require('../config/passport');
+const Volunteer = require('../models/Volunteer');
+const Organization = require('../models/Organization');
+const Admin = require('../models/Admin');
 
-// Email transporter setup
 const transporter = nodemailer.createTransport({
   service: 'gmail',
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS
-  }
+  auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
 });
 
-// @desc    Register a new user
-// @route   POST /api/auth/register
-// @access  Public
-exports.register = async (req, res) => {
+const sendEmail = async (to, subject, html) => {
   try {
-    const { name, email, password, role, organizationName } = req.body;
-
-    // Check if user exists
-    let user = await User.findOne({ email });
-    if (user) {
-      return res.status(400).json({ message: 'User already exists' });
-    }
-
-    // Create user
-    user = await User.create({
-      name,
-      email,
-      password,
-      role: role || 'user',
-      organizationName: role === 'organizer' ? organizationName : undefined
-    });
-
-    // Generate email verification token
-    const verificationToken = user.generateEmailVerificationToken();
-    await user.save({ validateBeforeSave: false });
-
-    // Send verification email
-    try {
-      await transporter.sendMail({
-        to: user.email,
-        subject: 'Verify Your Email - Volunteer Platform',
-        html: `
-          <h2>Welcome to Volunteer Community Platform!</h2>
-          <p>Please click the link below to verify your email:</p>
-          <a href="${process.env.FRONTEND_URL}/verify-email/${verificationToken}">Verify Email</a>
-        `
-      });
-    } catch (emailError) {
-      console.log('Email sending failed:', emailError);
-    }
-
-    // Create token
-    const token = jwt.sign(
-      { id: user._id },
-      process.env.JWT_SECRET,
-      { expiresIn: '30d' }
-    );
-
-    res.status(201).json({
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      isVerified: user.isVerified,
-      emailVerified: user.emailVerified,
-      token
-    });
-
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server error' });
+    await transporter.sendMail({ to, subject, html });
+  } catch (e) {
+    console.log('Email failed:', e.message);
   }
 };
 
-// @desc    Login user
-// @route   POST /api/auth/login
-// @access  Public
+const signToken = (id, userType) =>
+  jwt.sign({ id, userType }, process.env.JWT_SECRET, { expiresIn: '30d' });
+
+const buildResponse = (doc, userType, token) => {
+  if (userType === 'volunteer') {
+    return {
+      _id: doc._id, name: doc.name, email: doc.email,
+      role: 'user', userType,
+      isVerified: doc.verification?.isVerified || false,
+      emailVerified: doc.verification?.emailVerified || false,
+      profile: doc.profile,
+      stats: doc.stats,
+      preferences: doc.preferences,
+      token,
+    };
+  }
+  if (userType === 'organization') {
+    return {
+      _id: doc._id,
+      name: doc.account.name, email: doc.account.email,
+      role: 'organizer', userType,
+      emailVerified: doc.account.emailVerified || false,
+      organization: doc.organization,
+      verification: doc.verification,
+      stats: doc.stats,
+      preferences: doc.preferences,
+      token,
+    };
+  }
+  if (userType === 'admin') {
+    return {
+      _id: doc._id, name: doc.name, email: doc.email,
+      role: 'admin', userType,
+      adminRole: doc.adminRole,
+      permissions: doc.permissions,
+      profile: doc.profile,
+      token,
+    };
+  }
+};
+
+// ── REGISTER ──────────────────────────────────────────────────────────────────
+exports.register = async (req, res) => {
+  try {
+    const { name, email, password, role,
+      organizationName, organizationDescription, organizationType,
+      organizationWebsite, organizationPhone, organizationCity, organizationRegion,
+    } = req.body;
+
+    if (role === 'organizer') {
+      const exists = await Organization.findOne({ 'account.email': email });
+      if (exists) return res.status(400).json({ message: 'Email already registered' });
+
+      const org = await Organization.create({
+        account: { name, email, password },
+        organization: {
+          name: organizationName || name,
+          description: organizationDescription,
+          type: organizationType,
+          website: organizationWebsite,
+          phone: organizationPhone,
+          city: organizationCity,
+          region: organizationRegion,
+        },
+      });
+
+      const verifyToken = org.generateEmailVerificationToken();
+      await org.save({ validateBeforeSave: false });
+
+      await sendEmail(email, 'Verify Your Email — UNITEE',
+        `<h2>Welcome to UNITEE!</h2><p>Click to verify: <a href="${process.env.FRONTEND_URL}/verify-email/${verifyToken}">Verify Email</a></p>`
+      );
+
+      const token = signToken(org._id, 'organization');
+      return res.status(201).json(buildResponse(org, 'organization', token));
+    }
+
+    // Default: volunteer
+    const exists = await Volunteer.findOne({ email });
+    if (exists) return res.status(400).json({ message: 'Email already registered' });
+
+    const vol = await Volunteer.create({ name, email, password });
+    const verifyToken = vol.generateEmailVerificationToken();
+    await vol.save({ validateBeforeSave: false });
+
+    await sendEmail(email, 'Verify Your Email — UNITEE',
+      `<h2>Welcome to UNITEE!</h2><p>Click to verify: <a href="${process.env.FRONTEND_URL}/verify-email/${verifyToken}">Verify Email</a></p>`
+    );
+
+    const token = signToken(vol._id, 'volunteer');
+    return res.status(201).json(buildResponse(vol, 'volunteer', token));
+
+  } catch (err) {
+    console.error('Register error:', err.message);
+    // Handle MongoDB duplicate key error
+    if (err.code === 11000) {
+      return res.status(400).json({ message: 'Email already registered' });
+    }
+    res.status(500).json({ message: 'Server error', detail: err.message });
+  }
+};
+
+// ── LOGIN ─────────────────────────────────────────────────────────────────────
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // Check for user
-    const user = await User.findOne({ email }).select('+password');
-    if (!user) {
-      return res.status(400).json({ message: 'Invalid credentials' });
+    // Try admin first
+    let admin = await Admin.findOne({ email }).select('+password');
+    if (admin) {
+      if (admin.status === 'suspended') return res.status(403).json({ message: 'Account suspended' });
+      const match = await admin.matchPassword(password);
+      if (!match) return res.status(400).json({ message: 'Invalid credentials' });
+      await admin.updateLastActive();
+      const token = signToken(admin._id, 'admin');
+      return res.json(buildResponse(admin, 'admin', token));
     }
 
-    // Check if password matches
-    const isMatch = await user.matchPassword(password);
-    if (!isMatch) {
-      return res.status(400).json({ message: 'Invalid credentials' });
+    // Try organization
+    let org = await Organization.findOne({ 'account.email': email }).select('+account.password');
+    if (org) {
+      if (!org.isActive) return res.status(403).json({ message: 'Account suspended' });
+      const match = await org.matchPassword(password);
+      if (!match) return res.status(400).json({ message: 'Invalid credentials' });
+      await org.updateLastActive();
+      const token = signToken(org._id, 'organization');
+      return res.json(buildResponse(org, 'organization', token));
     }
 
-    // Update last active
-    await user.updateLastActive();
+    // Try volunteer
+    let vol = await Volunteer.findOne({ email }).select('+password');
+    if (vol) {
+      if (!vol.isActive) return res.status(403).json({ message: 'Account suspended' });
+      const match = await vol.matchPassword(password);
+      if (!match) return res.status(400).json({ message: 'Invalid credentials' });
+      await vol.updateLastActive();
+      const token = signToken(vol._id, 'volunteer');
+      return res.json(buildResponse(vol, 'volunteer', token));
+    }
 
-    // Create token
-    const token = jwt.sign(
-      { id: user._id },
-      process.env.JWT_SECRET,
-      { expiresIn: '30d' }
-    );
-
-    res.json({
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      isVerified: user.isVerified,
-      emailVerified: user.emailVerified,
-      profile: user.profile,
-      organizationName: user.organizationName,
-      token
-    });
-
-  } catch (error) {
-    console.error(error);
+    return res.status(400).json({ message: 'Invalid credentials' });
+  } catch (err) {
+    console.error(err);
     res.status(500).json({ message: 'Server error' });
   }
 };
 
-// @desc    Get current user
-// @route   GET /api/auth/me
-// @access  Private
+// ── GET ME ────────────────────────────────────────────────────────────────────
 exports.getMe = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).select('-password');
-    res.json(user);
-  } catch (error) {
-    res.status(500).json({ message: 'Server error' });
+    const { user, userType } = req;
+    if (!user) return res.status(401).json({ message: 'Not authenticated' });
+    const response = buildResponse(user, userType, null);
+    if (!response) return res.status(500).json({ message: 'Failed to build user response' });
+    // Remove null token from response
+    delete response.token;
+    res.json(response);
+  } catch (err) {
+    console.error('getMe error:', err);
+    res.status(500).json({ message: 'Server error', detail: err.message });
   }
 };
 
-// @desc    Update user profile
-// @route   PUT /api/auth/profile
-// @access  Private
+// ── UPDATE PROFILE ────────────────────────────────────────────────────────────
 exports.updateProfile = async (req, res) => {
   try {
-    const { name, profile, organizationName, organizationDescription } = req.body;
-    
-    const user = await User.findById(req.user.id);
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+    const { userType, user } = req;
+
+    if (userType === 'volunteer') {
+      const { name, profile, preferences } = req.body;
+      if (name) user.name = name;
+      if (profile) user.profile = { ...user.profile.toObject?.() || user.profile, ...profile };
+      if (preferences) user.preferences = { ...user.preferences.toObject?.() || user.preferences, ...preferences };
+      await user.save();
+      return res.json(buildResponse(user, 'volunteer', null));
     }
 
-    // Update fields
-    if (name) user.name = name;
-    if (profile) user.profile = { ...user.profile, ...profile };
-    if (organizationName) user.organizationName = organizationName;
-    if (organizationDescription) user.organizationDescription = organizationDescription;
+    if (userType === 'organization') {
+      const { accountName, organization, preferences } = req.body;
+      if (accountName) user.account.name = accountName;
+      if (organization) user.organization = { ...user.organization.toObject?.() || user.organization, ...organization };
+      if (preferences) user.preferences = { ...user.preferences.toObject?.() || user.preferences, ...preferences };
+      await user.save();
+      return res.json(buildResponse(user, 'organization', null));
+    }
 
-    await user.save();
-    res.json(user);
-  } catch (error) {
+    if (userType === 'admin') {
+      const { name, profile } = req.body;
+      if (name) user.name = name;
+      if (profile) user.profile = { ...user.profile?.toObject?.() || user.profile || {}, ...profile };
+      await user.save();
+      return res.json(buildResponse(user, 'admin', null));
+    }
+
+    res.status(400).json({ message: 'Unknown user type' });
+  } catch (err) {
+    console.error(err);
     res.status(500).json({ message: 'Server error' });
   }
 };
 
-// @desc    Verify email
-// @route   GET /api/auth/verify-email/:token
-// @access  Public
+// ── VERIFY EMAIL ──────────────────────────────────────────────────────────────
 exports.verifyEmail = async (req, res) => {
   try {
-    const hashedToken = crypto.createHash('sha256').update(req.params.token).digest('hex');
-    const user = await User.findOne({ emailVerificationToken: hashedToken });
+    const hashed = crypto.createHash('sha256').update(req.params.token).digest('hex');
 
-    if (!user) {
-      return res.status(400).json({ message: 'Invalid verification token' });
+    let user = await Volunteer.findOne({ 'verification.emailVerificationToken': hashed });
+    if (user) {
+      user.verification.emailVerified = true;
+      user.verification.emailVerificationToken = undefined;
+      await user.save();
+      return res.json({ message: 'Email verified' });
     }
 
-    user.emailVerified = true;
-    user.emailVerificationToken = undefined;
-    await user.save();
+    user = await Organization.findOne({ 'account.emailVerificationToken': hashed });
+    if (user) {
+      user.account.emailVerified = true;
+      user.account.emailVerificationToken = undefined;
+      await user.save();
+      return res.json({ message: 'Email verified' });
+    }
 
-    res.json({ message: 'Email verified successfully' });
-  } catch (error) {
+    res.status(400).json({ message: 'Invalid or expired token' });
+  } catch (err) {
     res.status(500).json({ message: 'Server error' });
   }
 };
 
-// @desc    Forgot password
-// @route   POST /api/auth/forgot-password
-// @access  Public
+// ── FORGOT PASSWORD ───────────────────────────────────────────────────────────
 exports.forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
-    const user = await User.findOne({ email });
 
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
+    let user = await Admin.findOne({ email });
+    let userType = 'admin';
+    if (!user) { user = await Organization.findOne({ 'account.email': email }); userType = 'organization'; }
+    if (!user) { user = await Volunteer.findOne({ email }); userType = 'volunteer'; }
+    if (!user) return res.status(404).json({ message: 'No account with that email' });
 
-    const resetToken = user.generatePasswordResetToken();
+    const token = user.generatePasswordResetToken();
     await user.save({ validateBeforeSave: false });
 
-    try {
-      await transporter.sendMail({
-        to: user.email,
-        subject: 'Password Reset - Volunteer Platform',
-        html: `
-          <h2>Password Reset Request</h2>
-          <p>Click the link below to reset your password:</p>
-          <a href="${process.env.FRONTEND_URL}/reset-password/${resetToken}">Reset Password</a>
-          <p>This link expires in 10 minutes.</p>
-        `
-      });
+    await sendEmail(email, 'Password Reset — UNITEE',
+      `<h2>Password Reset</h2><p><a href="${process.env.FRONTEND_URL}/reset-password/${token}">Reset Password</a></p><p>Expires in 10 minutes.</p>`
+    );
 
-      res.json({ message: 'Password reset email sent' });
-    } catch (emailError) {
-      user.passwordResetToken = undefined;
-      user.passwordResetExpires = undefined;
-      await user.save({ validateBeforeSave: false });
-      return res.status(500).json({ message: 'Email could not be sent' });
-    }
-  } catch (error) {
+    res.json({ message: 'Password reset email sent' });
+  } catch (err) {
     res.status(500).json({ message: 'Server error' });
   }
 };
 
-// @desc    Reset password
-// @route   PUT /api/auth/reset-password/:token
-// @access  Public
+// ── RESET PASSWORD ────────────────────────────────────────────────────────────
 exports.resetPassword = async (req, res) => {
   try {
-    const hashedToken = crypto.createHash('sha256').update(req.params.token).digest('hex');
-    const user = await User.findOne({
-      passwordResetToken: hashedToken,
-      passwordResetExpires: { $gt: Date.now() }
-    });
+    const hashed = crypto.createHash('sha256').update(req.params.token).digest('hex');
+    const now = Date.now();
 
+    let user = await Admin.findOne({ 'verification.passwordResetToken': hashed, 'verification.passwordResetExpires': { $gt: now } }).select('+password');
+    let userType = 'admin';
     if (!user) {
-      return res.status(400).json({ message: 'Invalid or expired reset token' });
+      user = await Organization.findOne({ 'account.passwordResetToken': hashed, 'account.passwordResetExpires': { $gt: now } }).select('+account.password');
+      userType = 'organization';
+    }
+    if (!user) {
+      user = await Volunteer.findOne({ 'verification.passwordResetToken': hashed, 'verification.passwordResetExpires': { $gt: now } }).select('+password');
+      userType = 'volunteer';
+    }
+    if (!user) return res.status(400).json({ message: 'Invalid or expired token' });
+
+    if (userType === 'organization') {
+      user.account.password = req.body.password;
+      user.account.passwordResetToken = undefined;
+      user.account.passwordResetExpires = undefined;
+    } else if (userType === 'admin') {
+      user.password = req.body.password;
+      user.verification.passwordResetToken = undefined;
+      user.verification.passwordResetExpires = undefined;
+    } else {
+      user.password = req.body.password;
+      user.verification.passwordResetToken = undefined;
+      user.verification.passwordResetExpires = undefined;
     }
 
-    user.password = req.body.password;
-    user.passwordResetToken = undefined;
-    user.passwordResetExpires = undefined;
     await user.save();
-
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '30d' });
-
-    res.json({
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      token
-    });
-  } catch (error) {
+    const token = signToken(user._id, userType);
+    res.json(buildResponse(user, userType, token));
+  } catch (err) {
     res.status(500).json({ message: 'Server error' });
   }
 };
 
-// @desc    Change password
-// @route   PUT /api/auth/change-password
-// @access  Private
+// ── CHANGE PASSWORD ───────────────────────────────────────────────────────────
 exports.changePassword = async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
-    const user = await User.findById(req.user.id).select('+password');
+    const { userType } = req;
 
-    const isMatch = await user.matchPassword(currentPassword);
-    if (!isMatch) {
-      return res.status(400).json({ message: 'Current password is incorrect' });
+    let user;
+    if (userType === 'admin') {
+      user = await Admin.findById(req.user._id).select('+password');
+    } else if (userType === 'organization') {
+      user = await Organization.findById(req.user._id).select('+account.password');
+    } else {
+      user = await Volunteer.findById(req.user._id).select('+password');
     }
 
-    user.password = newPassword;
+    const match = await user.matchPassword(currentPassword);
+    if (!match) return res.status(400).json({ message: 'Current password is incorrect' });
+
+    if (userType === 'organization') {
+      user.account.password = newPassword;
+    } else {
+      user.password = newPassword;
+    }
     await user.save();
-
-    res.json({ message: 'Password updated successfully' });
-  } catch (error) {
+    res.json({ message: 'Password updated' });
+  } catch (err) {
     res.status(500).json({ message: 'Server error' });
   }
 };
 
-// @desc    Google OAuth success
-// @route   GET /api/auth/google/success
-// @access  Private
+// ── GOOGLE OAUTH SUCCESS ──────────────────────────────────────────────────────
 exports.googleSuccess = async (req, res) => {
-  if (req.user) {
-    const token = jwt.sign({ id: req.user._id }, process.env.JWT_SECRET, { expiresIn: '30d' });
-    
-    res.redirect(`${process.env.FRONTEND_URL}/auth/success?token=${token}&user=${encodeURIComponent(JSON.stringify({
-      _id: req.user._id,
-      name: req.user.name,
-      email: req.user.email,
-      role: req.user.role,
-      profile: req.user.profile
-    }))}`);;
-  } else {
-    res.redirect(`${process.env.FRONTEND_URL}/login?error=auth_failed`);
-  }
+  if (!req.user) return res.redirect(`${process.env.FRONTEND_URL}/login?error=auth_failed`);
+  const token = signToken(req.user._id, 'volunteer');
+  res.redirect(`${process.env.FRONTEND_URL}/auth/success?token=${token}&user=${encodeURIComponent(JSON.stringify(buildResponse(req.user, 'volunteer', null)))}`);
 };
-// @desc    Logout
-// @route   POST /api/auth/logout
-// @access  Private
-exports.logout = async (req, res) => {
-  try {
-    res.json({ message: 'Logged out successfully' });
-  } catch (error) {
-    res.status(500).json({ message: 'Server error' });
-  }
-};
+
+exports.logout = (req, res) => res.json({ message: 'Logged out' });

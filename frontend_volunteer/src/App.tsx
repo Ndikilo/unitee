@@ -30,8 +30,23 @@ import Notifications from "./pages/Notifications";
 import MyOpportunities from "./pages/MyOpportunities";
 import Communities from "./pages/Communities";
 import CommunityDetail from "./pages/CommunityDetail";
+import TermsVolunteer from "./pages/TermsVolunteer";
+import TermsOrganization from "./pages/TermsOrganization";
+import PrivacyVolunteer from "./pages/PrivacyVolunteer";
+import PrivacyOrganization from "./pages/PrivacyOrganization";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30 * 1000,          // data is fresh for 30s
+      gcTime: 5 * 60 * 1000,         // cache kept for 5 min
+      refetchOnWindowFocus: true,    // refetch when user returns to tab
+      refetchOnReconnect: true,      // refetch when network comes back
+      refetchInterval: 60 * 1000,   // background refresh every 60s
+      retry: 2,
+    },
+  },
+});
 
 const App = () => (
   <ErrorBoundary>
@@ -40,7 +55,7 @@ const App = () => (
         <TooltipProvider>
           <Toaster />
           <Sonner />
-          <BrowserRouter>
+          <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
             <LanguageProvider>
               <AuthProvider>
                 <Routes>
@@ -55,6 +70,10 @@ const App = () => (
                   <Route path="/my-opportunities" element={<MyOpportunities />} />
                   <Route path="/communities" element={<Communities />} />
                   <Route path="/community/:id" element={<CommunityDetail />} />
+                  <Route path="/terms-volunteer" element={<TermsVolunteer />} />
+                  <Route path="/terms-organization" element={<TermsOrganization />} />
+                  <Route path="/privacy-volunteer" element={<PrivacyVolunteer />} />
+                  <Route path="/privacy-organization" element={<PrivacyOrganization />} />
                   <Route path="/profile" element={<Profile />} />
                   <Route path="/settings" element={<Settings />} />
                   <Route path="/notifications" element={<Notifications />} />

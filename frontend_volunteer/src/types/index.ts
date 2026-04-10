@@ -1,17 +1,61 @@
 // User types
+export type UserType = 'volunteer' | 'organization' | 'admin';
+
 export interface User {
   _id: string;
   name: string;
   email: string;
   role: 'user' | 'admin' | 'organizer';
-  createdAt: string;
+  userType: UserType;
+  // Volunteer fields
+  profile?: {
+    avatar?: string;
+    phone?: string;
+    city?: string;
+    country?: string;
+    bio?: string;
+    skills?: string[];
+    interests?: string[];
+    dateOfBirth?: string;
+  };
+  verification?: {
+    emailVerified?: boolean;
+    isVerified?: boolean;
+  };
+  stats?: {
+    totalHours: number;
+    totalEvents: number;
+    peopleHelped: number;
+    badges: any[];
+  };
+  preferences?: {
+    emailNotifications: boolean;
+    smsNotifications: boolean;
+    emergencyAlerts: boolean;
+    language: string;
+  };
+  // Organization fields
+  organization?: {
+    name?: string;
+    description?: string;
+    website?: string;
+    type?: string;
+    phone?: string;
+    city?: string;
+    region?: string;
+    logo?: string;
+    banner?: string;
+  };
+  // Admin fields
+  adminRole?: 'super_admin' | 'moderator' | 'verifier' | 'support';
+  permissions?: string[];
+  // Legacy compat
+  emailVerified?: boolean;
+  isVerified?: boolean;
+  createdAt?: string;
 }
 
-export interface AuthResponse {
-  _id: string;
-  name: string;
-  email: string;
-  role: 'user' | 'admin' | 'organizer';
+export interface AuthResponse extends User {
   token: string;
 }
 
@@ -70,6 +114,12 @@ export interface RegisterForm {
   confirmPassword: string;
   role?: string;
   organizationName?: string;
+  organizationDescription?: string;
+  organizationType?: string;
+  organizationWebsite?: string;
+  organizationPhone?: string;
+  organizationCity?: string;
+  organizationRegion?: string;
 }
 
 export interface LoginForm {

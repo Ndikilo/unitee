@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import DashboardLayout from '@/components/DashboardLayout';
+import CertificateTemplatesTab from '@/components/admin/CertificateTemplatesTab';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -14,7 +16,7 @@ import {
   RefreshCw, Trash2, Search, FileText, Award, Bell, MapPin, Eye, Settings as SettingsIcon,
   Plus, Edit, X
 } from 'lucide-react';
-import { adminAPI, opportunityAPI, communityAPI } from '@/lib/api';
+import { adminAPI, opportunityAPI, communityAPI, badgeAPI } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 
 const AdminDashboard: React.FC = () => {
@@ -28,6 +30,7 @@ const AdminDashboard: React.FC = () => {
   const [reports, setReports] = useState<any[]>([]);
   const [applications, setApplications] = useState<any[]>([]);
   const [certificates, setCertificates] = useState<any[]>([]);
+  const [badges, setBadges] = useState<any[]>([]);
   const [systemHealth, setSystemHealth] = useState<any>(null);
   const [loadingSystemHealth, setLoadingSystemHealth] = useState(false);
   const [categories, setCategories] = useState<string[]>([
@@ -53,12 +56,24 @@ const AdminDashboard: React.FC = () => {
   const [showEditCommModal, setShowEditCommModal] = useState(false);
   const [showNotificationModal, setShowNotificationModal] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [showBadgeModal, setShowBadgeModal] = useState(false);
+  const [showBadgeStatsModal, setShowBadgeStatsModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState<any>(null);
   
   // Forms
   const [alertData, setAlertData] = useState({ title: '', message: '', severity: 'medium', targetCity: '' });
   const [notificationData, setNotificationData] = useState({ title: '', message: '', targetRole: 'all' });
   const [newCategory, setNewCategory] = useState('');
+  const [badgeFormData, setBadgeFormData] = useState({
+    name: '',
+    description: '',
+    icon: '🏆',
+    category: 'participation',
+    criteriaType: 'events_completed',
+    threshold: 1,
+    tier: 'bronze',
+    points: 10
+  });
 
 
   useEffect(() => {
@@ -87,6 +102,16 @@ const AdminDashboard: React.FC = () => {
       console.error('Dashboard error:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchBadges = async () => {
+    try {
+      const badgesData = await badgeAPI.adminGetAllBadges();
+      setBadges(Array.isArray(badgesData) ? badgesData : []);
+    } catch (err: any) {
+      console.error('Badges error:', err);
+      toast({ title: "Error", description: "Failed to load badges", variant: "destructive" });
     }
   };
 
@@ -241,6 +266,123 @@ const AdminDashboard: React.FC = () => {
     toast({ title: "Success", description: "Category removed" });
   };
 
+  // Badge Management
+  const handleCreateBadge = async () => {
+    try {
+      if (!badgeFormData.name || !badgeFormData.description) {
+        toast({ title: "Error", description: "Name and description required", variant: "destructive" });
+        return;
+      }
+      await badgeAPI.adminCreateBadge({
+        name: badgeFormData.name,
+        description: badgeFormData.description,
+        icon: badgeFormData.icon,
+        category: badgeFormData.category,
+        criteria: {
+          type: badgeFormData.criteriaType,
+          threshold: badgeFormData.threshold
+        },
+        tier: badgeFormData.tier,
+        points: badgeFormData.points
+      });
+      setShowBadgeModal(false);
+      setBadgeFormData({
+        name: '',
+        description: '',
+        icon: '🏆',
+        category: 'participation',
+        criteriaType: 'events_completed',
+        threshold: 1,
+        tier: 'bronze',
+        points: 10
+      });
+      fetchBadges();
+      toast({ title: "Success", description: "Badge created successfully" });
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    }
+  };
+
+  const handleUpdateBadge = async () => {
+    try {
+      if (!selectedItem?._id) return;
+      await badgeAPI.adminUpdateBadge(selectedItem._id, {
+        name: badgeFormData.name,
+        description: badgeFormData.description,
+        icon: badgeFormData.icon,
+        category: badgeFormData.category,
+        criteria: {
+          type: badgeFormData.criteriaType,
+          threshold: badgeFormData.threshold
+        },
+        tier: badgeFormData.tier,
+        points: badgeFormData.points
+      });
+      setShowBadgeModal(false);
+      setSelectedItem(null);
+      fetchBadges();
+      toast({ title: "Success", description: "Badge updated successfully" });
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    }
+  };
+
+  const handleDeleteBadge = async (badgeId: string) => {
+    try {
+      if (!confirm('Delete this badge? This action cannot be undone.')) return;
+      await badgeAPI.adminDeleteBadge(badgeId);
+      fetchBadges();
+      toast({ title: "Success", description: "Badge deleted successfully" });
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    }
+  };
+
+  const handleToggleBadge = async (badgeId: string) => {
+    try {
+      await badgeAPI.adminToggleBadge(badgeId);
+      fetchBadges();
+      toast({ title: "Success", description: "Badge status updated" });
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    }
+  };
+
+  const handleDuplicateBadge = async (badgeId: string) => {
+    try {
+      await badgeAPI.adminDuplicateBadge(badgeId);
+      fetchBadges();
+      toast({ title: "Success", description: "Badge duplicated successfully" });
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    }
+  };
+
+  const handleEditBadge = (badge: any) => {
+    setSelectedItem(badge);
+    setBadgeFormData({
+      name: badge.name,
+      description: badge.description,
+      icon: badge.icon,
+      category: badge.category,
+      criteriaType: badge.criteria.type,
+      threshold: badge.criteria.threshold,
+      tier: badge.tier,
+      points: badge.points
+    });
+    setShowBadgeModal(true);
+  };
+
+  const handleViewBadgeStats = async (badge: any) => {
+    try {
+      const stats = await badgeAPI.adminGetBadgeStats(badge._id);
+      setSelectedItem(stats);
+      setShowBadgeStatsModal(true);
+    } catch (err: any) {
+      toast({ title: "Error", description: "Failed to load badge stats", variant: "destructive" });
+    }
+  };
+
   // Fetch System Health
   const fetchSystemHealth = async () => {
     if (systemHealth && Date.now() - systemHealth.timestamp < 300000) {
@@ -304,12 +446,12 @@ const AdminDashboard: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="container mx-auto px-4 py-8">
+      <DashboardLayout>
         <div className="flex flex-col items-center justify-center min-h-[400px]">
           <Loader2 className="h-12 w-12 animate-spin text-blue-500 mb-4" />
           <p className="text-gray-600">Loading admin panel...</p>
         </div>
-      </div>
+      </DashboardLayout>
     );
   }
 
@@ -317,9 +459,9 @@ const AdminDashboard: React.FC = () => {
   const filteredOpportunities = getFilteredOpportunities();
   const filteredCommunities = getFilteredCommunities();
 
-
   return (
-    <div className="container mx-auto px-4 py-8 max-w-7xl">
+    <DashboardLayout>
+    <div className="max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
@@ -379,14 +521,16 @@ const AdminDashboard: React.FC = () => {
       </div>
 
       {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={(tab) => { setActiveTab(tab); if (tab === 'system') fetchSystemHealth(); }} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-9">
+      <Tabs value={activeTab} onValueChange={(tab) => { setActiveTab(tab); if (tab === 'system') fetchSystemHealth(); if (tab === 'badges') fetchBadges(); }} className="space-y-6">
+        <TabsList className="grid w-full grid-cols-11">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="users">Users</TabsTrigger>
           <TabsTrigger value="opportunities">Opportunities</TabsTrigger>
           <TabsTrigger value="communities">Communities</TabsTrigger>
           <TabsTrigger value="applications">Applications</TabsTrigger>
           <TabsTrigger value="certificates">Certificates</TabsTrigger>
+          <TabsTrigger value="cert-templates">Templates</TabsTrigger>
+          <TabsTrigger value="badges">Badges</TabsTrigger>
           <TabsTrigger value="reports">Reports</TabsTrigger>
           <TabsTrigger value="system">System Health</TabsTrigger>
           <TabsTrigger value="settings">Settings</TabsTrigger>
@@ -438,6 +582,90 @@ const AdminDashboard: React.FC = () => {
           <Card>
             <CardHeader><div className="flex justify-between"><CardTitle>Certificate Management</CardTitle><Button size="sm" onClick={() => setShowNotificationModal(true)}><Plus className="h-4 w-4 mr-1" />Issue Certificate</Button></div></CardHeader>
             <CardContent>{certificates.length === 0 ? (<div className="text-center py-12"><Award className="h-16 w-16 mx-auto text-gray-300 mb-4" /><p className="text-gray-600">No certificates issued</p></div>) : (<div className="space-y-2">{certificates.map(cert => (<div key={cert._id} className="flex justify-between p-4 border rounded"><div><h3 className="font-semibold">{cert.volunteer?.name}</h3><p className="text-sm text-gray-600">{cert.opportunity?.title}</p><p className="text-xs text-gray-500">{cert.hours} hours • Issued {new Date(cert.issuedAt).toLocaleDateString()}</p></div><Button size="sm" variant="outline">View</Button></div>))}</div>)}</CardContent>
+          </Card>
+
+        </TabsContent>
+
+        {/* Certificate Templates Tab */}
+        <CertificateTemplatesTab />
+
+
+        {/* Badges Tab */}
+        <TabsContent value="badges">
+          <Card>
+            <CardHeader>
+              <div className="flex justify-between items-center">
+                <div>
+                  <CardTitle>Badge Management</CardTitle>
+                  <p className="text-sm text-gray-600 mt-1">Create and manage achievement badges for volunteers</p>
+                </div>
+                <Button onClick={() => { setSelectedItem(null); setBadgeFormData({ name: '', description: '', icon: '🏆', category: 'participation', criteriaType: 'events_completed', threshold: 1, tier: 'bronze', points: 10 }); setShowBadgeModal(true); }}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create Badge
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {badges.length === 0 ? (
+                <div className="text-center py-12">
+                  <Award className="h-16 w-16 mx-auto text-gray-300 mb-4" />
+                  <p className="text-gray-600 mb-4">No badges created yet</p>
+                  <Button onClick={() => setShowBadgeModal(true)}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create Your First Badge
+                  </Button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {badges.map(badge => (
+                    <div key={badge._id} className={`p-4 border rounded-lg ${badge.isActive ? 'bg-white' : 'bg-gray-50 opacity-75'}`}>
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex items-center gap-3">
+                          <div className="text-4xl">{badge.icon}</div>
+                          <div>
+                            <h3 className="font-semibold text-sm">{badge.name}</h3>
+                            <div className="flex items-center gap-2 mt-1">
+                              <Badge variant="outline" className="text-xs">{badge.category}</Badge>
+                              <Badge variant={badge.tier === 'platinum' ? 'default' : badge.tier === 'gold' ? 'default' : badge.tier === 'silver' ? 'secondary' : 'outline'} className="text-xs">{badge.tier}</Badge>
+                            </div>
+                          </div>
+                        </div>
+                        <Badge variant={badge.isActive ? 'default' : 'secondary'} className="text-xs">
+                          {badge.isActive ? 'Active' : 'Inactive'}
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-gray-600 mb-3">{badge.description}</p>
+                      <div className="flex items-center justify-between text-xs text-gray-500 mb-3 pb-3 border-b">
+                        <span>Criteria: {badge.criteria.type.replace(/_/g, ' ')}</span>
+                        <span>Threshold: {badge.criteria.threshold}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs mb-3">
+                        <span className="text-gray-600">Points: <span className="font-semibold text-blue-600">{badge.points}</span></span>
+                        <span className="text-gray-600">Earned by: <span className="font-semibold text-green-600">{badge.earnedCount || 0}</span> users</span>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="outline" onClick={() => handleViewBadgeStats(badge)} className="flex-1">
+                          <Eye className="h-3 w-3 mr-1" />
+                          Stats
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => handleEditBadge(badge)}>
+                          <Edit className="h-3 w-3" />
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => handleToggleBadge(badge._id)}>
+                          {badge.isActive ? <Ban className="h-3 w-3" /> : <CheckCircle className="h-3 w-3" />}
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => handleDuplicateBadge(badge._id)}>
+                          <Plus className="h-3 w-3" />
+                        </Button>
+                        <Button size="sm" variant="destructive" onClick={() => handleDeleteBadge(badge._id)}>
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
           </Card>
         </TabsContent>
 
@@ -591,7 +819,167 @@ const AdminDashboard: React.FC = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Badge Create/Edit Modal */}
+      <Dialog open={showBadgeModal} onOpenChange={setShowBadgeModal}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{selectedItem ? 'Edit Badge' : 'Create New Badge'}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Badge Name</Label>
+                <Input placeholder="e.g., First Steps" value={badgeFormData.name} onChange={(e) => setBadgeFormData({ ...badgeFormData, name: e.target.value })} />
+              </div>
+              <div>
+                <Label>Icon (Emoji)</Label>
+                <Input placeholder="🏆" value={badgeFormData.icon} onChange={(e) => setBadgeFormData({ ...badgeFormData, icon: e.target.value })} maxLength={2} />
+              </div>
+            </div>
+            <div>
+              <Label>Description</Label>
+              <Textarea placeholder="Badge description..." value={badgeFormData.description} onChange={(e) => setBadgeFormData({ ...badgeFormData, description: e.target.value })} rows={3} />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Category</Label>
+                <Select value={badgeFormData.category} onValueChange={(v) => setBadgeFormData({ ...badgeFormData, category: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="participation">Participation</SelectItem>
+                    <SelectItem value="hours">Hours</SelectItem>
+                    <SelectItem value="impact">Impact</SelectItem>
+                    <SelectItem value="community">Community</SelectItem>
+                    <SelectItem value="skills">Skills</SelectItem>
+                    <SelectItem value="leadership">Leadership</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Tier</Label>
+                <Select value={badgeFormData.tier} onValueChange={(v) => setBadgeFormData({ ...badgeFormData, tier: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="bronze">Bronze</SelectItem>
+                    <SelectItem value="silver">Silver</SelectItem>
+                    <SelectItem value="gold">Gold</SelectItem>
+                    <SelectItem value="platinum">Platinum</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Criteria Type</Label>
+                <Select value={badgeFormData.criteriaType} onValueChange={(v) => setBadgeFormData({ ...badgeFormData, criteriaType: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="events_completed">Events Completed</SelectItem>
+                    <SelectItem value="hours_logged">Hours Logged</SelectItem>
+                    <SelectItem value="people_helped">People Helped</SelectItem>
+                    <SelectItem value="communities_joined">Communities Joined</SelectItem>
+                    <SelectItem value="skills_added">Skills Added</SelectItem>
+                    <SelectItem value="events_created">Events Created</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Threshold</Label>
+                <Input type="number" min="1" value={badgeFormData.threshold} onChange={(e) => setBadgeFormData({ ...badgeFormData, threshold: parseInt(e.target.value) || 1 })} />
+              </div>
+            </div>
+            <div>
+              <Label>Points</Label>
+              <Input type="number" min="1" value={badgeFormData.points} onChange={(e) => setBadgeFormData({ ...badgeFormData, points: parseInt(e.target.value) || 10 })} />
+            </div>
+            <div className="p-4 bg-gray-50 rounded-lg">
+              <h4 className="font-semibold mb-2">Preview</h4>
+              <div className="flex items-center gap-3">
+                <div className="text-4xl">{badgeFormData.icon}</div>
+                <div>
+                  <p className="font-semibold">{badgeFormData.name || 'Badge Name'}</p>
+                  <p className="text-sm text-gray-600">{badgeFormData.description || 'Badge description'}</p>
+                  <div className="flex gap-2 mt-1">
+                    <Badge variant="outline" className="text-xs">{badgeFormData.category}</Badge>
+                    <Badge className="text-xs">{badgeFormData.tier}</Badge>
+                    <Badge variant="secondary" className="text-xs">{badgeFormData.points} pts</Badge>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setShowBadgeModal(false); setSelectedItem(null); }}>Cancel</Button>
+            <Button onClick={selectedItem ? handleUpdateBadge : handleCreateBadge}>
+              {selectedItem ? 'Update Badge' : 'Create Badge'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Badge Stats Modal */}
+      <Dialog open={showBadgeStatsModal} onOpenChange={setShowBadgeStatsModal}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Badge Statistics</DialogTitle>
+          </DialogHeader>
+          {selectedItem && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
+                <div className="text-5xl">{selectedItem.badge?.icon}</div>
+                <div className="flex-1">
+                  <h3 className="text-xl font-bold">{selectedItem.badge?.name}</h3>
+                  <p className="text-gray-600">{selectedItem.badge?.description}</p>
+                  <div className="flex gap-2 mt-2">
+                    <Badge variant="outline">{selectedItem.badge?.category}</Badge>
+                    <Badge>{selectedItem.badge?.tier}</Badge>
+                    <Badge variant="secondary">{selectedItem.badge?.points} points</Badge>
+                  </div>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <Card>
+                  <CardContent className="pt-6 text-center">
+                    <p className="text-3xl font-bold text-blue-600">{selectedItem.earnedCount || 0}</p>
+                    <p className="text-sm text-gray-600">Users Earned</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="pt-6 text-center">
+                    <p className="text-3xl font-bold text-green-600">{selectedItem.badge?.criteria?.threshold}</p>
+                    <p className="text-sm text-gray-600">Threshold</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="pt-6 text-center">
+                    <p className="text-3xl font-bold text-purple-600">{selectedItem.badge?.isActive ? 'Active' : 'Inactive'}</p>
+                    <p className="text-sm text-gray-600">Status</p>
+                  </CardContent>
+                </Card>
+              </div>
+              {selectedItem.recentEarners && selectedItem.recentEarners.length > 0 && (
+                <div>
+                  <h4 className="font-semibold mb-3">Recent Earners</h4>
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {selectedItem.recentEarners.map((earner: any, idx: number) => (
+                      <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 rounded">
+                        <div>
+                          <p className="font-medium">{earner.userName}</p>
+                          <p className="text-sm text-gray-600">{earner.userEmail}</p>
+                        </div>
+                        <p className="text-xs text-gray-500">{new Date(earner.earnedAt).toLocaleDateString()}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
+    </DashboardLayout>
   );
 };
 

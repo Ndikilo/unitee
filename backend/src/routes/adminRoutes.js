@@ -14,9 +14,18 @@ const {
   getAnalytics,
   getRecentActivity
 } = require('../controllers/adminController');
-const { protect, authorize } = require('../middleware/auth');
+const {
+  getAllBadges,
+  createBadge,
+  updateBadge,
+  deleteBadge,
+  toggleBadge,
+  getBadgeStats,
+  duplicateBadge
+} = require('../controllers/badgeController');
+const { protect, authorize, requirePermission } = require('../middleware/auth');
 
-// Apply admin protection to all routes
+// All admin routes require auth + admin userType
 router.use(protect);
 router.use(authorize('admin'));
 
@@ -43,5 +52,18 @@ router.route('/emergency-alerts')
   .post(createEmergencyAlert);
 
 router.put('/emergency-alerts/:id/deactivate', deactivateEmergencyAlert);
+
+// Badge management
+router.route('/badges')
+  .get(getAllBadges)
+  .post(createBadge);
+
+router.route('/badges/:id')
+  .put(updateBadge)
+  .delete(deleteBadge);
+
+router.patch('/badges/:id/toggle', toggleBadge);
+router.get('/badges/:id/stats', getBadgeStats);
+router.post('/badges/:id/duplicate', duplicateBadge);
 
 module.exports = router;

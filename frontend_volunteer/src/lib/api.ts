@@ -1,24 +1,5 @@
-// Dynamically determine API base URL based on current host
-const getApiBaseUrl = () => {
-  // Check if we should use environment variable (only for localhost)
-  const envUrl = import.meta.env.VITE_API_BASE_URL;
-  const hostname = window.location.hostname;
-  
-  // If accessing via network IP, ALWAYS use the network IP for API (ignore env var)
-  if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
-    const apiUrl = `http://${hostname}:5000/api`;
-    console.log('🌐 Network access detected. Using API URL:', apiUrl);
-    return apiUrl;
-  }
-  
-  // For localhost, use env var if available, otherwise default
-  const apiUrl = envUrl || 'http://localhost:5000/api';
-  console.log('🏠 Local access detected. Using API URL:', apiUrl);
-  return apiUrl;
-};
-
-const API_BASE_URL = getApiBaseUrl();
-console.log('✅ API Base URL configured:', API_BASE_URL);
+// Resolve API base URL from environment variable (required in production)
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
 // Generic API request function
 const apiRequest = async (endpoint: string, options: RequestInit = {}) => {
@@ -34,34 +15,29 @@ const apiRequest = async (endpoint: string, options: RequestInit = {}) => {
   };
 
   const fullUrl = `${API_BASE_URL}${endpoint}`;
-  console.log(`📡 API Request: ${options.method || 'GET'} ${fullUrl}`);
 
   try {
     const response = await fetch(fullUrl, config);
     
-    console.log(`📥 API Response: ${response.status} ${response.statusText}`);
-    
     if (!response.ok) {
       const error = await response.json().catch(() => ({ message: 'Request failed' }));
-      console.error('❌ API Error:', error);
       throw new Error(error.message || 'API request failed');
     }
     
     const data = await response.json();
-    console.log('✅ API Success:', data);
     return data;
   } catch (error: any) {
-    console.error('❌ Fetch Error:', error.message);
     throw error;
   }
 };
 
 // Auth API
 export const authAPI = {
-  register: async (userData: { name: string; email: string; password: string; role?: string; organizationName?: string }) => {
+  register: async (userData: { name: string; email: string; password: string; confirmPassword?: string; role?: string; organizationName?: string; organizationDescription?: string; organizationType?: string; organizationWebsite?: string; organizationPhone?: string; organizationCity?: string; organizationRegion?: string }) => {
+    const { confirmPassword, ...payload } = userData;
     const data = await apiRequest('/auth/register', {
       method: 'POST',
-      body: JSON.stringify(userData),
+      body: JSON.stringify(payload),
     });
     
     // Store token in localStorage
@@ -411,8 +387,8 @@ export const notificationAPI = {
 
 // Certificate API
 export const certificateAPI = {
-  getUserCertificates: async () => {
-    return apiRequest('/certificates/my-certificates');
+  getUserCertificates: async (userId: string) => {
+    return apiRequest(`/certificates/user/${userId}`);
   },
 
   getCertificateById: async (certificateId: string) => {
@@ -447,6 +423,72 @@ export const certificateAPI = {
   },
 };
 
+// Badge API
+export const badgeAPI = {
+  getAllBadges: async () => {
+    return apiRequest('/badges');
+  },
+
+  getMyBadges: async () => {
+    return apiRequest('/badges/my-badges');
+  },
+
+  checkBadges: async () => {
+    return apiRequest('/badges/check', {
+      method: 'POST',
+    });
+  },
+
+  // Admin badge management
+  adminGetAllBadges: async () => {
+    return apiRequest('/admin/badges');
+  },
+
+  adminCreateBadge: async (badgeData: {
+    name: string;
+    description: string;
+    icon: string;
+    category: string;
+    criteria: { type: string; threshold: number };
+    tier?: string;
+    points?: number;
+  }) => {
+    return apiRequest('/admin/badges', {
+      method: 'POST',
+      body: JSON.stringify(badgeData),
+    });
+  },
+
+  adminUpdateBadge: async (badgeId: string, badgeData: any) => {
+    return apiRequest(`/admin/badges/${badgeId}`, {
+      method: 'PUT',
+      body: JSON.stringify(badgeData),
+    });
+  },
+
+  adminDeleteBadge: async (badgeId: string) => {
+    return apiRequest(`/admin/badges/${badgeId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  adminToggleBadge: async (badgeId: string) => {
+    return apiRequest(`/admin/badges/${badgeId}/toggle`, {
+      method: 'PATCH',
+    });
+  },
+
+  adminGetBadgeStats: async (badgeId: string) => {
+    return apiRequest(`/admin/badges/${badgeId}/stats`);
+  },
+
+  adminDuplicateBadge: async (badgeId: string) => {
+    return apiRequest(`/admin/badges/${badgeId}/duplicate`, {
+      method: 'POST',
+    });
+  },
+};
+
 // Setup API
 export const setupAPI = {
   createAdmin: async (adminData: { name: string; email: string; password: string; setupKey: string }) => {
@@ -458,6 +500,11 @@ export const setupAPI = {
 
   checkAdminExists: async () => {
     return apiRequest('/setup/admin-exists');
+  },
+
+  // Public — no auth required, safe to call on home page
+  getPublicStats: async () => {
+    return apiRequest('/setup/public-stats');
   },
 };
 
