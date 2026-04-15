@@ -2,7 +2,7 @@
 
 A comprehensive volunteer management platform connecting volunteers with community organizations and opportunities across Cameroon.
 
-## 🌟 Features
+##  Features
 
 ### For Volunteers
 - Browse and search volunteer opportunities
@@ -26,7 +26,7 @@ A comprehensive volunteer management platform connecting volunteers with communi
 - Platform analytics and oversight
 - System-wide management tools
 
-## 🚀 Tech Stack
+##  Tech Stack
 
 ### Frontend
 - React 18 with TypeScript
@@ -43,7 +43,7 @@ A comprehensive volunteer management platform connecting volunteers with communi
 - Passport.js for auth strategies
 - RESTful API architecture
 
-## 📦 Installation
+##  Installation
 
 ### Prerequisites
 - Node.js (v16 or higher)
@@ -167,4 +167,4 @@ This project is licensed under the MIT License.
 
 ## 📞 Support
 
-For support, email support@unitee.cm or open an issue in the repository.
+For support, email ndakwa23@gmail.com or open an issue in the repository.
