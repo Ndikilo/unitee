@@ -343,8 +343,10 @@ exports.changePassword = async (req, res) => {
 // ── GOOGLE OAUTH SUCCESS ──────────────────────────────────────────────────────
 exports.googleSuccess = async (req, res) => {
   if (!req.user) return res.redirect(`${process.env.FRONTEND_URL}/login?error=auth_failed`);
-  const token = signToken(req.user._id, 'volunteer');
-  res.redirect(`${process.env.FRONTEND_URL}/auth/success?token=${token}&user=${encodeURIComponent(JSON.stringify(buildResponse(req.user, 'volunteer', null)))}`);
+  const { doc, userType } = req.user;
+  const token = signToken(doc._id, userType);
+  const userData = buildResponse(doc, userType, null);
+  res.redirect(`${process.env.FRONTEND_URL}/auth/success?token=${token}&user=${encodeURIComponent(JSON.stringify(userData))}`);
 };
 
 exports.logout = (req, res) => res.json({ message: 'Logged out' });
