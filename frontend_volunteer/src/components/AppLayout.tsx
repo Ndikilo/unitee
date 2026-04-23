@@ -52,6 +52,7 @@ const AppLayout: React.FC = () => {
   const [currentView, setCurrentView] = useState(getInitialView());
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showGetStartedModal, setShowGetStartedModal] = useState(false);
+  const [getStartedRole, setGetStartedRole] = useState<'volunteer' | 'organizer' | undefined>(undefined);
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signup');
   const [isTransitioning, setIsTransitioning] = useState(false);
   
@@ -83,12 +84,23 @@ const AppLayout: React.FC = () => {
     if (isAuthenticated) {
       handleNavigation('opportunities');
     } else {
+      setGetStartedRole(undefined); // show role selection
       setShowGetStartedModal(true);
     }
   };
 
   const handleRegisterNGO = () => {
+    setGetStartedRole('organizer'); // skip to organizer form
     setShowGetStartedModal(true);
+  };
+
+  const handleStartVolunteering = () => {
+    if (isAuthenticated) {
+      handleNavigation('opportunities');
+    } else {
+      setGetStartedRole('volunteer'); // skip to volunteer form
+      setShowGetStartedModal(true);
+    }
   };
 
   const handleCategoryClick = (category: string) => {
@@ -272,7 +284,7 @@ const AppLayout: React.FC = () => {
 
             {/* CTA Section */}
             <CTASection 
-              onGetStarted={handleGetStarted}
+              onGetStarted={handleStartVolunteering}
               onRegisterNGO={handleRegisterNGO}
             />
           </>
@@ -307,6 +319,7 @@ const AppLayout: React.FC = () => {
       <GetStartedModal
         isOpen={showGetStartedModal}
         onClose={() => setShowGetStartedModal(false)}
+        initialRole={getStartedRole}
         onSwitchToLogin={() => {
           setAuthMode('signin');
           setShowAuthModal(true);
