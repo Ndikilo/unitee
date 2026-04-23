@@ -20,6 +20,7 @@ import VolunteerDashboard from '@/components/dashboard/VolunteerDashboard';
 import OrganizerDashboard from '@/components/dashboard/OrganizerDashboard';
 import AdminDashboard from '@/components/admin/AdminDashboard';
 import AuthModal from '@/components/auth/AuthModal';
+import GetStartedModal from '@/components/auth/GetStartedModal';
 
 // Pages
 import About from '@/pages/About';
@@ -50,6 +51,7 @@ const AppLayout: React.FC = () => {
   
   const [currentView, setCurrentView] = useState(getInitialView());
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [showGetStartedModal, setShowGetStartedModal] = useState(false);
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signup');
   const [isTransitioning, setIsTransitioning] = useState(false);
   
@@ -81,12 +83,12 @@ const AppLayout: React.FC = () => {
     if (isAuthenticated) {
       handleNavigation('opportunities');
     } else {
-      window.location.href = '/register';
+      setShowGetStartedModal(true);
     }
   };
 
   const handleRegisterNGO = () => {
-    window.location.href = '/register';
+    setShowGetStartedModal(true);
   };
 
   const handleCategoryClick = (category: string) => {
@@ -294,11 +296,21 @@ const AppLayout: React.FC = () => {
       {/* Footer */}
       <Footer onNavigate={handleNavigation} />
 
-      {/* Auth Modal */}
+      {/* Auth Modal (Sign In) */}
       <AuthModal
         isOpen={showAuthModal}
         onClose={() => setShowAuthModal(false)}
         initialMode={authMode}
+      />
+
+      {/* Get Started Modal (Sign Up flow) */}
+      <GetStartedModal
+        isOpen={showGetStartedModal}
+        onClose={() => setShowGetStartedModal(false)}
+        onSwitchToLogin={() => {
+          setAuthMode('signin');
+          setShowAuthModal(true);
+        }}
       />
     </div>
   );
