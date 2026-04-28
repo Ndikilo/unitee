@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '@/contexts/NewAuthContext';
 import { Heart, Building, Mail, Lock, User, Eye, EyeOff, CheckCircle2, ArrowLeft, X, MapPin } from 'lucide-react';
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api').replace('/api', '');
+const API_BASE_URL = ((import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:5000/api').replace('/api', '');
 
 type Step = 'role' | 'form' | 'verify-sent';
 type Role = 'volunteer' | 'organizer';
@@ -43,7 +43,6 @@ const GetStartedModal: React.FC<Props> = ({ isOpen, onClose, onSwitchToLogin, in
   const [loading, setLoading] = useState(false);
 
   const { register } = useAuth();
-  const navigate = useNavigate();
 
   const pv = {
     minLength: password.length >= 8,

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React,  { useState, useEffect, useNavigate } from 'react';
 import { useAuth } from '@/contexts/NewAuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 
@@ -30,6 +30,7 @@ import TermsOfService from '@/pages/TermsOfService';
 import SafetyGuidelines from '@/pages/SafetyGuidelines';
 import CommunityStandards from '@/pages/CommunityStandards';
 import CertificateVerify from '@/pages/CertificateVerify';
+import { useNavigate } from 'react-router-dom';
 
 
 const AppLayout: React.FC = () => {
