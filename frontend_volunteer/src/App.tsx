@@ -13,13 +13,11 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import AdminRegister from "./pages/AdminRegister";
 import Dashboard from "./pages/Dashboard";
-import OrganizerDashboard from "./pages/OrganizerDashboard";
 import OrganizerDashboardEnhanced from "./pages/OrganizerDashboardEnhanced";
 import AdminDashboard from "./pages/AdminDashboard";
 import RoleBasedDashboard from "./pages/RoleBasedDashboard";
 import NotFound from "./pages/NotFound";
 import AuthSuccess from "./pages/AuthSuccess";
-import BackendLogin from "@/components/BackendLogin";
 import Opportunities from "./pages/Opportunities";
 import EmailVerification from "./pages/EmailVerification";
 import ForgotPassword from "./pages/ForgotPassword";
@@ -82,7 +80,6 @@ const App = () => (
                   <Route path="/organizer-dashboard" element={<OrganizerDashboardEnhanced />} />
                   <Route path="/admin-dashboard" element={<AdminDashboard />} />
                   <Route path="/auth/success" element={<AuthSuccess />} />
-                  <Route path="/backend-test" element={<BackendLogin />} />
                   <Route path="*" element={<NotFound />} />
                 </Routes>
               </AuthProvider>
