@@ -1,13 +1,12 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 
 const PrivacyVolunteer: React.FC = () => (
   <div className="min-h-screen bg-gray-50 py-12 px-4">
     <div className="max-w-3xl mx-auto">
-      <Link to="/register" className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-800 mb-8">
+      <button onClick={() => window.history.back()} className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-800 mb-8">
         <ArrowLeft size={16} /> Back to Registration
-      </Link>
+      </button>
 
       <div className="bg-white rounded-2xl shadow-sm p-10">
         <div className="flex items-center gap-3 mb-2">
