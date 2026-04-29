@@ -13,9 +13,10 @@ const HERO_IMAGES = [
 interface HeroSectionProps {
   onGetStarted: () => void;
   onRegisterNGO: () => void;
+  onStartVolunteering?: () => void;
 }
 
-const HeroSection: React.FC<HeroSectionProps> = ({ onGetStarted, onRegisterNGO }) => {
+const HeroSection: React.FC<HeroSectionProps> = ({ onGetStarted, onRegisterNGO, onStartVolunteering }) => {
   const { isAuthenticated } = useAuth();
   const [activeImage, setActiveImage] = useState(0);
   const { data: statsData } = usePublicStats();
@@ -93,6 +94,12 @@ const HeroSection: React.FC<HeroSectionProps> = ({ onGetStarted, onRegisterNGO }
             >
               {isAuthenticated ? 'Browse Opportunities' : 'Get Started Free'}
               <ChevronRightIcon size={20} className="group-hover:translate-x-1 transition-transform" />
+            </button>
+            <button
+              onClick={onStartVolunteering ?? onGetStarted}
+              className="px-8 py-4 bg-white/10 backdrop-blur-sm text-white font-semibold rounded-xl border border-white/25 hover:bg-white/20 transition-all flex items-center justify-center gap-2"
+            >
+              Volunteer
             </button>
             <button
               onClick={onRegisterNGO}

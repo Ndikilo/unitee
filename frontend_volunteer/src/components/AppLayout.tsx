@@ -1,4 +1,4 @@
-import React,  { useState, useEffect, useNavigate } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/NewAuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 
@@ -19,7 +19,6 @@ import CommunitiesGrid from '@/components/communities/CommunitiesGrid';
 import VolunteerDashboard from '@/components/dashboard/VolunteerDashboard';
 import OrganizerDashboard from '@/components/dashboard/OrganizerDashboard';
 import AdminDashboard from '@/components/admin/AdminDashboard';
-import AuthModal from '@/components/auth/AuthModal';
 import GetStartedModal from '@/components/auth/GetStartedModal';
 
 // Pages
@@ -30,7 +29,6 @@ import TermsOfService from '@/pages/TermsOfService';
 import SafetyGuidelines from '@/pages/SafetyGuidelines';
 import CommunityStandards from '@/pages/CommunityStandards';
 import CertificateVerify from '@/pages/CertificateVerify';
-import { useNavigate } from 'react-router-dom';
 
 
 const AppLayout: React.FC = () => {
@@ -51,10 +49,8 @@ const AppLayout: React.FC = () => {
   };
   
   const [currentView, setCurrentView] = useState(getInitialView());
-  const [showAuthModal, setShowAuthModal] = useState(false);
   const [showGetStartedModal, setShowGetStartedModal] = useState(false);
   const [getStartedRole, setGetStartedRole] = useState<'volunteer' | 'organizer' | undefined>(undefined);
-  const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signup');
   const [isTransitioning, setIsTransitioning] = useState(false);
   
   // Try to get auth context, but don't fail if it's not available
@@ -261,6 +257,7 @@ const AppLayout: React.FC = () => {
             <HeroSection 
               onGetStarted={handleGetStarted}
               onRegisterNGO={handleRegisterNGO}
+              onStartVolunteering={handleStartVolunteering}
             />
 
             {/* Featured Opportunities */}
@@ -299,6 +296,7 @@ const AppLayout: React.FC = () => {
       <Header 
         currentView={currentView}
         onNavigate={handleNavigation}
+        onGetStarted={handleGetStarted}
       />
 
       {/* Main Content */}
@@ -309,21 +307,14 @@ const AppLayout: React.FC = () => {
       {/* Footer */}
       <Footer onNavigate={handleNavigation} />
 
-      {/* Auth Modal (Sign In) */}
-      <AuthModal
-        isOpen={showAuthModal}
-        onClose={() => setShowAuthModal(false)}
-        initialMode={authMode}
-      />
-
       {/* Get Started Modal (Sign Up flow) */}
       <GetStartedModal
         isOpen={showGetStartedModal}
         onClose={() => setShowGetStartedModal(false)}
         initialRole={getStartedRole}
         onSwitchToLogin={() => {
-          setAuthMode('signin');
-          setShowAuthModal(true);
+          setShowGetStartedModal(false);
+          window.location.href = '/login';
         }}
       />
     </div>

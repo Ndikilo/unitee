@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/NewAuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
-import AuthModal from '@/components/auth/AuthModal';
 import Logo from '@/components/Logo';
 import {
   BellIcon,
@@ -21,13 +20,12 @@ import {
 interface HeaderProps {
   currentView: string;
   onNavigate: (view: string) => void;
+  onGetStarted?: () => void;
 }
 
-const Header: React.FC<HeaderProps> = ({ currentView, onNavigate }) => {
+const Header: React.FC<HeaderProps> = ({ currentView, onNavigate, onGetStarted }) => {
   const { user, isAuthenticated, logout, loading: authLoading } = useAuth();
   const { language, setLanguage } = useLanguage();
-  const [showAuthModal, setShowAuthModal] = useState(false);
-  const [authMode] = useState<'signin' | 'signup'>('signin');
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -191,7 +189,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, onNavigate }) => {
                     Sign In
                   </button>
                   <button
-                    onClick={() => (window.location.href = '/register')}
+                    onClick={() => onGetStarted?.()}
                     className="px-4 py-2 text-sm font-semibold bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-colors shadow-sm"
                   >
                     Get Started
@@ -241,7 +239,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, onNavigate }) => {
                   Sign In
                 </button>
                 <button
-                  onClick={() => { window.location.href = '/register'; setShowMobileMenu(false); }}
+                  onClick={() => { onGetStarted?.(); setShowMobileMenu(false); }}
                   className="w-full py-3 text-sm font-semibold bg-orange-500 text-white rounded-xl hover:bg-orange-600 transition-colors"
                 >
                   Get Started
@@ -251,8 +249,6 @@ const Header: React.FC<HeaderProps> = ({ currentView, onNavigate }) => {
           </div>
         )}
       </header>
-
-      <AuthModal isOpen={showAuthModal} onClose={() => setShowAuthModal(false)} initialMode={authMode} />
     </>
   );
 };
