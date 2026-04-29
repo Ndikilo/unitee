@@ -89,17 +89,11 @@ const HeroSection: React.FC<HeroSectionProps> = ({ onGetStarted, onRegisterNGO, 
           {/* CTAs */}
           <div className="flex flex-col sm:flex-row gap-4 mb-16">
             <button
-              onClick={onGetStarted}
+              onClick={onStartVolunteering ?? onGetStarted}
               className="group px-8 py-4 bg-orange-500 hover:bg-orange-400 text-white font-semibold rounded-xl transition-all shadow-lg shadow-orange-500/30 flex items-center justify-center gap-2"
             >
-              {isAuthenticated ? 'Browse Opportunities' : 'Get Started Free'}
+              {isAuthenticated ? 'Browse Opportunities' : 'Volunteer'}
               <ChevronRightIcon size={20} className="group-hover:translate-x-1 transition-transform" />
-            </button>
-            <button
-              onClick={onStartVolunteering ?? onGetStarted}
-              className="px-8 py-4 bg-white/10 backdrop-blur-sm text-white font-semibold rounded-xl border border-white/25 hover:bg-white/20 transition-all flex items-center justify-center gap-2"
-            >
-              Volunteer
             </button>
             <button
               onClick={onRegisterNGO}
