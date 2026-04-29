@@ -19,6 +19,15 @@ const GetStartedModal: React.FC<Props> = ({ isOpen, onClose, onSwitchToLogin, in
   const [step, setStep] = useState<Step>(initialRole ? 'form' : 'role');
   const [role, setRole] = useState<Role>(initialRole ?? 'volunteer');
 
+  // Sync initialRole into state every time the modal opens
+  React.useEffect(() => {
+    if (isOpen) {
+      setStep(initialRole ? 'form' : 'role');
+      setRole(initialRole ?? 'volunteer');
+      setError('');
+    }
+  }, [isOpen, initialRole]);
+
   // Volunteer fields
   const [name, setName] = useState('');
 
