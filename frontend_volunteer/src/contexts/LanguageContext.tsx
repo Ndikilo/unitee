@@ -25,7 +25,7 @@ const translations: Translations = {
   'hero.title': { en: 'Connect. Serve. Transform.', fr: 'Connecter. Servir. Transformer.' },
   'hero.subtitle': { en: 'Join thousands of volunteers making a difference in Cameroon and beyond', fr: 'Rejoignez des milliers de bénévoles qui font la différence au Cameroun et au-delà' },
   'hero.cta': { en: 'Start Volunteering', fr: 'Commencer le Bénévolat' },
-  'hero.ctaOrg': { en: 'Register Your NGO', fr: 'Enregistrer Votre ONG' },
+  'hero.ctaOrg': { en: 'Post Opportunities', fr: 'Publier des Opportunités' },
   
   // Stats
   'stats.volunteers': { en: 'Active Volunteers', fr: 'Bénévoles Actifs' },

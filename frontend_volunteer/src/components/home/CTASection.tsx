@@ -50,7 +50,7 @@ const CTASection: React.FC<CTASectionProps> = ({ onGetStarted, onRegisterNGO }) 
             onClick={onRegisterNGO}
             className="w-full sm:w-auto px-8 py-4 bg-white/10 backdrop-blur-sm text-white font-semibold rounded-xl border border-white/30 hover:bg-white/20 transition-all flex items-center justify-center gap-2"
           >
-            Register Your NGO
+            Post Opportunities
           </button>
         </div>
 

@@ -99,7 +99,7 @@ const HeroSection: React.FC<HeroSectionProps> = ({ onGetStarted, onRegisterNGO, 
               onClick={onRegisterNGO}
               className="px-8 py-4 bg-white/10 backdrop-blur-sm text-white font-semibold rounded-xl border border-white/25 hover:bg-white/20 transition-all flex items-center justify-center gap-2"
             >
-              Register Your NGO
+              Post Opportunities
             </button>
           </div>
 
