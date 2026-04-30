@@ -34,7 +34,7 @@ const CTASection: React.FC<CTASectionProps> = ({ onGetStarted, onRegisterNGO }) 
 
         {/* Subheading */}
         <p className="text-xl text-blue-100 mb-10 max-w-2xl mx-auto">
-          Join a growing movement of volunteers and organizations transforming communities across Cameroon. Your journey starts here.
+          Join a growing movement of volunteers and organizations transforming communities. Your journey starts here.
         </p>
 
         {/* CTA Buttons */}

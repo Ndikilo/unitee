@@ -72,7 +72,7 @@ const HeroSection: React.FC<HeroSectionProps> = ({ onGetStarted, onRegisterNGO, 
           {/* Pill badge */}
           <div className="inline-flex items-center gap-2 px-4 py-2 bg-orange-500/20 backdrop-blur-sm rounded-full border border-orange-400/30 mb-8">
             <span className="w-2 h-2 bg-orange-400 rounded-full animate-pulse" />
-            <span className="text-orange-300 text-sm font-medium tracking-wide">Empowering communities across Cameroon</span>
+            <span className="text-orange-300 text-sm font-medium tracking-wide">Empowering communities through volunteering</span>
           </div>
 
           {/* Headline */}

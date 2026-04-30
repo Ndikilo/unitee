@@ -13,11 +13,11 @@ const STEPS = [
   {
     number: '02',
     title: 'Discover Opportunities',
-    description: 'Browse verified opportunities from NGOs, CBOs and community groups across Cameroon. Filter by city, region, or cause that matters to you.',
+    description: 'Browse verified opportunities from NGOs, CBOs and community groups near you. Filter by city, region, or cause that matters to you.',
     // African community gathering / group activity
     image: 'https://images.unsplash.com/photo-1509099836639-18ba1795216d?w=600&q=80&auto=format&fit=crop',
     accent: 'bg-blue-600',
-    tag: 'Across Cameroon',
+    tag: 'Near You',
   },
   {
     number: '03',
@@ -49,7 +49,7 @@ const HowItWorks: React.FC = () => {
           <span className="text-sm font-semibold text-blue-600 uppercase tracking-widest">Simple process</span>
           <h2 className="text-4xl font-extrabold text-gray-900 mt-2 mb-4">How UNITEE Works</h2>
           <p className="text-gray-500 text-lg max-w-xl mx-auto">
-            From sign-up to making a real difference in your community — four simple steps built for Cameroon.
+            From sign-up to making a real difference in your community — four simple steps.
           </p>
         </div>
 
@@ -95,9 +95,9 @@ const HowItWorks: React.FC = () => {
         {/* Bottom quote */}
         <div className="mt-16 bg-gradient-to-r from-orange-50 to-blue-50 rounded-2xl p-8 text-center border border-orange-100">
           <p className="text-lg font-semibold text-gray-800 mb-1">
-            "Volunteering is not just giving time — it's building the Cameroon we want to see."
+            "Volunteering is not just giving time — it's building stronger communities."
           </p>
-          <p className="text-sm text-gray-500">— UNITEE Community, Douala</p>
+          <p className="text-sm text-gray-500">— UNITEE Community</p>
         </div>
 
       </div>
