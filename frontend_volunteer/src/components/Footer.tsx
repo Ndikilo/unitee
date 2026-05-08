@@ -13,7 +13,7 @@ const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
     platform: [
       { label: 'Browse Opportunities', action: () => onNavigate('opportunities') },
       { label: 'Find Communities', action: () => onNavigate('communities') },
-      { label: 'For NGOs', action: () => onNavigate('opportunities') },
+      { label: 'For Organizations', action: () => window.location.href = '/?view=home' },
       { label: 'Volunteer Passport', action: () => onNavigate('dashboard') }
     ],
     resources: [
@@ -71,7 +71,7 @@ const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
               <span className="text-xl font-bold"><span className="text-orange-400">UNI</span><span className="text-blue-400">TEE</span></span>
             </div>
             <p className="text-gray-400 text-sm mb-4">
-              Connecting volunteers with meaningful opportunities to transform communities across Cameroon and beyond.
+              Connecting volunteers with meaningful opportunities to transform communities everywhere.
             </p>
             {/* Language Toggle */}
             <div className="flex items-center gap-2">
@@ -171,7 +171,7 @@ const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
             <div className="flex items-center gap-1 text-gray-400 text-sm">
               <span>Made with</span>
               <HeartIcon size={16} className="text-red-500 fill-current" />
-              <span>in Cameroon</span>
+              <span>for communities</span>
             </div>
             
             <p className="text-gray-400 text-sm">

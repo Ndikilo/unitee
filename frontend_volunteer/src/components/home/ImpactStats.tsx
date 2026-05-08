@@ -33,68 +33,6 @@ const ImpactStats: React.FC = () => {
     return () => clearInterval(timer);
   }, [data]);
 
-  useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        setLoading(true);
-        const data = await adminAPI.getStats();
-        const newTargets = {
-          volunteers: data.totalUsers || 0,
-          hours: data.totalVolunteerHours || 0,
-          events: data.totalOpportunities || 0,
-          communities: data.totalCommunities || 0
-        };
-        setTargets(newTargets);
-
-        // Animate to the real numbers
-        if (newTargets.volunteers > 0 || newTargets.hours > 0 || newTargets.events > 0 || newTargets.communities > 0) {
-          const duration = 2000;
-          const steps = 60;
-          const interval = duration / steps;
-
-          let step = 0;
-          const timer = setInterval(() => {
-            step++;
-            const progress = step / steps;
-            const easeOut = 1 - Math.pow(1 - progress, 3);
-
-            setCounts({
-              volunteers: Math.floor(newTargets.volunteers * easeOut),
-              hours: Math.floor(newTargets.hours * easeOut),
-              events: Math.floor(newTargets.events * easeOut),
-              communities: Math.floor(newTargets.communities * easeOut)
-            });
-
-            if (step >= steps) {
-              clearInterval(timer);
-              setCounts(newTargets);
-            }
-          }, interval);
-
-          return () => clearInterval(timer);
-        }
-      } catch (error) {
-        // Silently fail for unauthorized access - show zeros
-        setTargets({
-          volunteers: 0,
-          hours: 0,
-          events: 0,
-          communities: 0
-        });
-        setCounts({
-          volunteers: 0,
-          hours: 0,
-          events: 0,
-          communities: 0
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchStats();
-  }, []);
-
   const stats = [
     { 
       label: 'Active Volunteers', 

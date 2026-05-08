@@ -7,7 +7,7 @@ const PARTNERS = [
   { name: 'World Vision', color: 'text-blue-800' },
   { name: 'UN Volunteers', color: 'text-sky-700' },
   { name: 'Peace Corps', color: 'text-blue-700' },
-  { name: 'GIZ Cameroon', color: 'text-green-700' },
+  { name: 'GIZ', color: 'text-green-700' },
 ];
 
 const PartnersSection: React.FC = () => {
