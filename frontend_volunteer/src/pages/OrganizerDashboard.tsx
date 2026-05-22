@@ -1,9 +1,9 @@
 import React from 'react';
 import { Navigate } from 'react-router-dom';
 
+// Redirect to the proper organizer dashboard route
 const OrganizerDashboard: React.FC = () => {
-  // Redirect to main app with dashboard view
-  return <Navigate to="/?view=dashboard" replace />;
+  return <Navigate to="/organizer-dashboard" replace />;
 };
 
 export default OrganizerDashboard;
