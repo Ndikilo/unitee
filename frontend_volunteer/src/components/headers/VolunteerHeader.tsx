@@ -19,7 +19,7 @@ const VolunteerHeader: React.FC = () => {
     { label: 'Opportunities', href: '/opportunities', icon: Briefcase },
     { label: 'My Activities', href: '/my-opportunities', icon: Award },
     { label: 'Communities', href: '/communities', icon: Users },
-    { label: 'Certificates', href: '/profile', icon: FileText },
+    { label: 'Certificates', href: '/volunteer-dashboard?tab=certificates', icon: FileText },
   ];
 
   const isActive = (href: string) => location.pathname === href;
@@ -65,7 +65,7 @@ const VolunteerHeader: React.FC = () => {
                 <button onClick={() => setShowUserMenu(!showUserMenu)}
                   className="flex items-center gap-2 pl-1 pr-2 py-1 rounded-xl hover:bg-gray-100 transition-colors">
                   <img
-                    src={`https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || 'V')}&background=f97316&color=fff&size=64`}
+                    src={user.profile?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || 'V')}&background=f97316&color=fff&size=64`}
                     alt={user.name} className="w-8 h-8 rounded-lg object-cover" />
                   <div className="hidden sm:block text-left">
                     <p className="text-sm font-semibold text-gray-800 leading-none">{user.name?.split(' ')[0]}</p>

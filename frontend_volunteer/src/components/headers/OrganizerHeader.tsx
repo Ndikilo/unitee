@@ -76,7 +76,7 @@ const OrganizerHeader: React.FC = () => {
                 <button onClick={() => setShowUserMenu(!showUserMenu)}
                   className="flex items-center gap-2 pl-1 pr-2 py-1 rounded-xl hover:bg-gray-100 transition-colors">
                   <img
-                    src={`https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || 'O')}&background=2563eb&color=fff&size=64`}
+                    src={(user as any).profile?.avatar || (user as any).organization?.logo || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || 'O')}&background=2563eb&color=fff&size=64`}
                     alt={user.name} className="w-8 h-8 rounded-lg object-cover" />
                   <div className="hidden sm:block text-left">
                     <p className="text-sm font-semibold text-gray-800 leading-none truncate max-w-[120px]">

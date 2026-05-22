@@ -11,12 +11,12 @@ import {
   Search, 
   SlidersHorizontal,
   CheckCircle,
-  Globe,
-  Mail,
-  Phone,
-  Calendar
+  Calendar,
+  Plus,
+  X
 } from 'lucide-react';
 import { communityAPI } from '@/lib/api';
+import { useAuth } from '@/contexts/NewAuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -57,11 +57,17 @@ const Communities: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user, isAuthenticated } = useAuth();
   
   const [communities, setCommunities] = useState<Community[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [createForm, setCreateForm] = useState({
+    name: '', description: '', category: '', city: '', contactEmail: '', website: ''
+  });
   
   const [searchQuery, setSearchQuery] = useState(searchParams.get('search') || '');
   const [selectedCategory, setSelectedCategory] = useState(searchParams.get('category') || '');
@@ -123,6 +129,33 @@ const Communities: React.FC = () => {
     setSearchParams({});
   };
 
+  const handleCreateCommunity = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!createForm.name.trim() || !createForm.description.trim() || !createForm.category) {
+      toast({ title: 'Error', description: 'Name, description and category are required', variant: 'destructive' });
+      return;
+    }
+    try {
+      setCreating(true);
+      await communityAPI.create({
+        name: createForm.name,
+        description: createForm.description,
+        category: createForm.category,
+        location: { city: createForm.city },
+        contactEmail: createForm.contactEmail,
+        website: createForm.website,
+      });
+      toast({ title: 'Community created!', description: 'Your community is now live.' });
+      setShowCreateModal(false);
+      setCreateForm({ name: '', description: '', category: '', city: '', contactEmail: '', website: '' });
+      fetchCommunities();
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to create community', variant: 'destructive' });
+    } finally {
+      setCreating(false);
+    }
+  };
+
   const CommunityCard = ({ community }: { community: Community }) => {
     return (
       <Card 
@@ -182,12 +215,75 @@ const Communities: React.FC = () => {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-2">Communities</h1>
-        <p className="text-gray-600">
-          Connect with organizations making a difference in Cameroon
-        </p>
+      <div className="mb-8 flex items-start justify-between">
+        <div>
+          <h1 className="text-3xl font-bold mb-2">Communities</h1>
+          <p className="text-gray-600">
+            Connect with organizations and groups making a difference
+          </p>
+        </div>
+        {isAuthenticated && (
+          <Button onClick={() => setShowCreateModal(true)} className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600">
+            <Plus size={16} />
+            Create Community
+          </Button>
+        )}
       </div>
+
+      {/* Create Community Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowCreateModal(false)} />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-6">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-xl font-bold text-gray-900">Create a Community</h2>
+              <button onClick={() => setShowCreateModal(false)} className="p-1.5 rounded-full hover:bg-gray-100 text-gray-400">
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleCreateCommunity} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Community Name <span className="text-red-500">*</span></label>
+                <Input value={createForm.name} onChange={e => setCreateForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Green Douala Initiative" required />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Description <span className="text-red-500">*</span></label>
+                <textarea value={createForm.description} onChange={e => setCreateForm(f => ({ ...f, description: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-400 outline-none resize-none"
+                  rows={3} placeholder="What is this community about?" required />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Category <span className="text-red-500">*</span></label>
+                  <select value={createForm.category} onChange={e => setCreateForm(f => ({ ...f, category: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-orange-400 outline-none" required>
+                    <option value="">Select</option>
+                    {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
+                  <Input value={createForm.city} onChange={e => setCreateForm(f => ({ ...f, city: e.target.value }))} placeholder="e.g. Douala" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Contact Email</label>
+                <Input type="email" value={createForm.contactEmail} onChange={e => setCreateForm(f => ({ ...f, contactEmail: e.target.value }))} placeholder="contact@community.org" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Website (optional)</label>
+                <Input type="url" value={createForm.website} onChange={e => setCreateForm(f => ({ ...f, website: e.target.value }))} placeholder="https://..." />
+              </div>
+              <div className="flex gap-3 pt-2">
+                <Button type="button" variant="outline" onClick={() => setShowCreateModal(false)} className="flex-1">Cancel</Button>
+                <Button type="submit" disabled={creating} className="flex-1 bg-orange-500 hover:bg-orange-600">
+                  {creating ? 'Creating...' : 'Create Community'}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Search and Filters */}
       <Card className="mb-6">

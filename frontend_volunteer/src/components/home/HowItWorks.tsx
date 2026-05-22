@@ -49,7 +49,7 @@ const HowItWorks: React.FC = () => {
           <span className="text-sm font-semibold text-blue-600 uppercase tracking-widest">Simple process</span>
           <h2 className="text-4xl font-extrabold text-gray-900 mt-2 mb-4">How UNITEE Works</h2>
           <p className="text-gray-500 text-lg max-w-xl mx-auto">
-            From sign-up to making a real difference in your community — four simple steps.
+            From sign-up to making a real difference in your community - four simple steps.
           </p>
         </div>
 

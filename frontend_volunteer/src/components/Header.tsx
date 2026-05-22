@@ -125,7 +125,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, onNavigate, onGetStarted }
                       className="flex items-center gap-2 pl-1 pr-2 py-1 rounded-xl hover:bg-gray-100 transition-colors"
                     >
                       <img
-                        src={`https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || 'U')}&background=10b981&color=fff&size=64`}
+                        src={user?.profile?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || 'U')}&background=10b981&color=fff&size=64`}
                         alt={user?.name}
                         className="w-8 h-8 rounded-lg object-cover"
                       />
