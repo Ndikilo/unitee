@@ -15,11 +15,13 @@ import {
   UserCheck
 } from 'lucide-react';
 import { organizerAPI } from '@/lib/api';
+import { useAuth } from '@/contexts/NewAuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const OrganizerDashboardEnhanced: React.FC = () => {
   const { toast } = useToast();
+  const { isAuthenticated, loading: authLoading } = useAuth();
   const [stats, setStats] = useState<any>(null);
   const [applications, setApplications] = useState<any[]>([]);
   const [opportunities, setOpportunities] = useState<any[]>([]);
@@ -27,8 +29,9 @@ const OrganizerDashboardEnhanced: React.FC = () => {
   const [processingId, setProcessingId] = useState<string | null>(null);
 
   useEffect(() => {
+    if (authLoading || !isAuthenticated) return;
     fetchDashboardData();
-  }, []);
+  }, [isAuthenticated, authLoading]);
 
   const fetchDashboardData = async () => {
     try {

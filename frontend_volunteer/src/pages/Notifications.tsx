@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -17,6 +18,7 @@ import {
   MessageSquare
 } from 'lucide-react';
 import { notificationAPI } from '@/lib/api';
+import { useAuth } from '@/contexts/NewAuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -34,6 +36,8 @@ interface Notification {
 
 const Notifications: React.FC = () => {
   const { toast } = useToast();
+  const { isAuthenticated, loading: authLoading } = useAuth();
+  const navigate = useNavigate();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -41,8 +45,14 @@ const Notifications: React.FC = () => {
   const [markingAllRead, setMarkingAllRead] = useState(false);
 
   useEffect(() => {
+    // Wait for auth to resolve before fetching
+    if (authLoading) return;
+    if (!isAuthenticated) {
+      navigate('/login');
+      return;
+    }
     fetchNotifications();
-  }, [filter]);
+  }, [filter, isAuthenticated, authLoading]);
 
   const fetchNotifications = async () => {
     try {

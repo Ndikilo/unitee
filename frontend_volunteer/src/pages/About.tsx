@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { GlobeIcon, UsersIcon, HeartIcon, TrophyIcon } from '@/components/icons/Icons';
-import { adminAPI } from '@/lib/api';
+import { setupAPI } from '@/lib/api';
 
 const About: React.FC = () => {
   const { t } = useLanguage();
@@ -13,12 +13,12 @@ const About: React.FC = () => {
   });
 
   useEffect(() => {
-    // Fetch real stats from API
-    adminAPI.getStats()
-      .then(data => {
+    // Use public stats endpoint — no auth required
+    setupAPI.getPublicStats()
+      .then((data: any) => {
         setStats({
           totalUsers: data.totalUsers || 0,
-          totalHours: data.totalHours || 0,
+          totalHours: data.totalVolunteerHours || 0,
           totalOpportunities: data.totalOpportunities || 0,
           totalCommunities: data.totalCommunities || 0
         });
