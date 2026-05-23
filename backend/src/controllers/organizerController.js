@@ -9,7 +9,7 @@ const asyncHandler = require('../middleware/async');
 // @access    Private (Organizer only)
 exports.getStats = asyncHandler(async (req, res, next) => {
   // Verify user is an organizer
-  if (req.user.role !== 'organizer') {
+  if (req.userType !== 'organization') {
     return next(new ErrorResponse('Access denied. Organizer role required.', 403));
   }
 
@@ -54,7 +54,7 @@ exports.getStats = asyncHandler(async (req, res, next) => {
 // @access    Private (Organizer only)
 exports.getOpportunities = asyncHandler(async (req, res, next) => {
   // Verify user is an organizer
-  if (req.user.role !== 'organizer') {
+  if (req.userType !== 'organization') {
     return next(new ErrorResponse('Access denied. Organizer role required.', 403));
   }
 
@@ -79,7 +79,7 @@ exports.getOpportunities = asyncHandler(async (req, res, next) => {
 // @access    Private (Organizer only)
 exports.getApplications = asyncHandler(async (req, res, next) => {
   // Verify user is an organizer
-  if (req.user.role !== 'organizer') {
+  if (req.userType !== 'organization') {
     return next(new ErrorResponse('Access denied. Organizer role required.', 403));
   }
 
@@ -115,7 +115,7 @@ exports.getApplications = asyncHandler(async (req, res, next) => {
 // @access    Private (Organizer only)
 exports.updateApplicationStatus = asyncHandler(async (req, res, next) => {
   // Verify user is an organizer
-  if (req.user.role !== 'organizer') {
+  if (req.userType !== 'organization') {
     return next(new ErrorResponse('Access denied. Organizer role required.', 403));
   }
 
@@ -160,7 +160,7 @@ exports.updateApplicationStatus = asyncHandler(async (req, res, next) => {
 // @access    Private (Organizer only)
 exports.updateOpportunityStatus = asyncHandler(async (req, res, next) => {
   // Verify user is an organizer
-  if (req.user.role !== 'organizer') {
+  if (req.userType !== 'organization') {
     return next(new ErrorResponse('Access denied. Organizer role required.', 403));
   }
 
@@ -203,7 +203,7 @@ exports.updateOpportunityStatus = asyncHandler(async (req, res, next) => {
 // @access    Private (Organizer only)
 exports.generateOpportunityContent = asyncHandler(async (req, res, next) => {
   // Verify user is an organizer
-  if (req.user.role !== 'organizer') {
+  if (req.userType !== 'organization') {
     return next(new ErrorResponse('Access denied. Organizer role required.', 403));
   }
 
@@ -233,7 +233,7 @@ exports.generateOpportunityContent = asyncHandler(async (req, res, next) => {
 // @access    Private (Organizer only)
 exports.getProfile = asyncHandler(async (req, res, next) => {
   // Verify user is an organizer
-  if (req.user.role !== 'organizer') {
+  if (req.userType !== 'organization') {
     return next(new ErrorResponse('Access denied. Organizer role required.', 403));
   }
 

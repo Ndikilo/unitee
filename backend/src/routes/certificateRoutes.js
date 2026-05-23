@@ -18,10 +18,10 @@ router.get('/verify/:certificateId', verifyCertificate);
 // Protected routes
 router.use(protect);
 
-router.post('/generate', authorize('organizer', 'admin'), generateCertificate);
+router.post('/generate', authorize('organization', 'admin'), generateCertificate);
 router.get('/user/:userId', getUserCertificates);
 router.get('/download/:certificateId', downloadCertificate);
-router.put('/revoke/:certificateId', authorize('organizer', 'admin'), revokeCertificate);
+router.put('/revoke/:certificateId', authorize('organization', 'admin'), revokeCertificate);
 
 // Admin only routes
 router.get('/stats', authorize('admin'), getCertificateStats);

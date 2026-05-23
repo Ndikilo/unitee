@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { useAuth } from '@/contexts/NewAuthContext';
-import { useLanguage } from '@/contexts/LanguageContext';
-import { organizerAPI, opportunityAPI, communityAPI } from '@/lib/api';
+import React, { useState, useEffect, useRef } from 'react';
+import { useToast } from '@/hooks/use-toast';
+import { organizerAPI, opportunityAPI } from '@/lib/api';
+import apiRequest from '@/lib/api';
 import {
   PlusIcon,
   UsersIcon,
@@ -10,550 +10,558 @@ import {
   CheckIcon,
   XIcon,
   SparklesIcon,
-  ClockIcon,
   BarChartIcon,
-  ShieldCheckIcon
+  ShieldCheckIcon,
 } from '@/components/icons/Icons';
 
-const OrganizerDashboard: React.FC = () => {
-  const { user } = useAuth();
-  
-  // Try to get language context, but provide fallback if not available
-  let t = (key: string) => key; // Default fallback function
-  let language = 'en'; // Default language
-  try {
-    const { t: translateFn, language: lang } = useLanguage();
-    t = translateFn;
-    language = lang;
-  } catch (error) {
-    console.log('Language context not available, using fallback');
-  }
-  
-  const [activeTab, setActiveTab] = useState<'overview' | 'opportunities' | 'applicants' | 'create'>('overview');
-  const [loading, setLoading] = useState(false);
-  const [dataLoading, setDataLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  
-  const [isGenerating, setIsGenerating] = useState(false);
-  
-  // Real data states
-  const [stats, setStats] = useState({
-    activeOpportunities: 0,
-    totalApplicants: 0,
-    totalViews: 0,
-    completedEvents: 0,
-    applicationRate: 0,
-    completionRate: 0,
-    averageRating: 0
-  });
-  const [opportunities, setOpportunities] = useState<any[]>([]);
-  const [applicants, setApplicants] = useState<any[]>([]);
-  
-  // Create opportunity form state
-  const [formData, setFormData] = useState({
-    title: '',
-    goal: '',
-    city: '',
-    category: 'Environment',
-    description: '',
-    volunteers_needed: 20,
-    hours_per_volunteer: 4,
-    start_date: '',
-    end_date: '',
-    skills_required: [] as string[],
-    community: '',
-    contact_email: '',
-    is_emergency: false,
-  });
-  const [skillInput, setSkillInput] = useState('');
-  const [createError, setCreateError] = useState('');
-  const [createSuccess, setCreateSuccess] = useState(false);
-  const [communities, setCommunities] = useState<any[]>([]);
+// ─── Certificate Modal ────────────────────────────────────────────────────────
+interface CertModalProps {
+  opportunity: any;
+  acceptedVolunteers: any[];
+  onClose: () => void;
+}
 
-  const statsCards = [
-    { label: 'Active Opportunities', value: stats.activeOpportunities || 0, icon: CalendarIcon, color: 'bg-blue-500' },
-    { label: 'Total Applicants', value: stats.totalApplicants || 0, icon: UsersIcon, color: 'bg-emerald-500' },
-    { label: 'Total Views', value: stats.totalViews || 0, icon: EyeIcon, color: 'bg-purple-500' },
-    { label: 'Completed Events', value: stats.completedEvents || 0, icon: CheckIcon, color: 'bg-amber-500' }
-  ];
+const CertificateModal: React.FC<CertModalProps> = ({ opportunity, acceptedVolunteers, onClose }) => {
+  const { toast } = useToast();
+  const [issuingId, setIssuingId] = useState<string | null>(null);
+  const [issuedIds, setIssuedIds] = useState<Set<string>>(new Set());
 
-  // Mock data for now
-  const mockOpportunitiesData: any[] = [];
-  const mockApplicantsData: any[] = [];
-
-  // Use state data or fall back to mock
-  const opportunitiesData = opportunities.length > 0 ? opportunities : mockOpportunitiesData;
-  const applicantsData = applicants.length > 0 ? applicants : mockApplicantsData;
-
-  const categories = [
-    'Environment', 'Education', 'Healthcare', 'Humanitarian', 'Social Services', 'Economic Development'
-  ];
-
-  useEffect(() => {
-    const loadDashboardData = async () => {
-      try {
-        setDataLoading(true);
-        const [statsData, opportunitiesData, applicantsData] = await Promise.all([
-          organizerAPI.getStats(),
-          organizerAPI.getOpportunities({ status: 'all' }),
-          organizerAPI.getApplications()
-        ]);
-
-        if (statsData) {
-          setStats({
-            activeOpportunities: statsData.activeOpportunities || 0,
-            totalApplicants: statsData.totalApplicants || 0,
-            totalViews: statsData.totalViews || 0,
-            completedEvents: statsData.completedEvents || 0,
-            applicationRate: statsData.applicationRate || 0,
-            completionRate: statsData.completionRate || 0,
-            averageRating: statsData.averageRating || 0
-          });
-        }
-
-        if (opportunitiesData && opportunitiesData.length > 0) {
-          setOpportunities(opportunitiesData);
-        } else {
-          setOpportunities([]);
-        }
-
-        if (applicantsData && applicantsData.length > 0) {
-          setApplicants(applicantsData);
-        } else {
-          setApplicants([]);
-        }
-      } catch (err) {
-        console.error('Failed to load dashboard data:', err);
-        // Set empty arrays instead of mock data
-        setOpportunities([]);
-        setApplicants([]);
-      } finally {
-        setDataLoading(false);
-      }
-    };
-
-    if (user) {
-      loadDashboardData();
-      // Load communities for the opportunity form
-      communityAPI.getAll({ limit: 50 }).then((res: any) => {
-        setCommunities(res.data || res || []);
-      }).catch(() => {});
-    }
-  }, [user]);
-
-  const handleAIAssist = async () => {
-    if (!formData.title || !formData.goal || !formData.city) {
-      alert('Please fill in title, goal, and city first');
-      return;
-    }
-    setIsGenerating(true);
+  const handleIssue = async (volunteer: any) => {
+    setIssuingId(volunteer._id);
     try {
-      setFormData(prev => ({
-        ...prev,
-        description: `Join us for ${formData.title} in ${formData.city}. This ${formData.category.toLowerCase()} initiative aims to ${formData.goal}. Your participation will make a real difference in our community. We welcome volunteers of all backgrounds and experience levels.`,
-        skills_required: ['Teamwork', 'Communication', 'Enthusiasm']
-      }));
-    } catch (err) {
-      console.error('AI assist error:', err);
+      await apiRequest('/certificates/generate', {
+        method: 'POST',
+        body: JSON.stringify({
+          type: 'volunteer_completion',
+          title: `Volunteer Certificate — ${opportunity.title}`,
+          description: `Awarded for completing the volunteer opportunity: ${opportunity.title}`,
+          recipientId: volunteer._id,
+          opportunityId: opportunity._id,
+          hoursCompleted: opportunity.dateTime?.duration || 4,
+          skillsAcquired: opportunity.requirements?.skills || [],
+          achievementLevel: 'bronze',
+        }),
+      });
+      setIssuedIds(prev => new Set([...prev, volunteer._id]));
+      toast({ title: 'Certificate issued', description: `Certificate issued to ${volunteer.name}` });
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to issue certificate', variant: 'destructive' });
     } finally {
-      setIsGenerating(false);
+      setIssuingId(null);
     }
   };
 
-  const handleCreateOpportunity = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setCreateError('');
-    setCreateSuccess(false);
-    if (!formData.title.trim()) return setCreateError('Title is required');
-    if (!formData.description.trim()) return setCreateError('Description is required');
-    if (!formData.start_date) return setCreateError('Start date is required');
-    if (!formData.community) return setCreateError('Please select a community');
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <h3 className="text-lg font-semibold text-gray-900">Issue Certificates</h3>
+          <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg">
+            <XIcon size={20} />
+          </button>
+        </div>
+        <div className="px-6 py-2 text-sm text-gray-500 border-b border-gray-50">
+          Opportunity: <span className="font-medium text-gray-700">{opportunity.title}</span>
+        </div>
+        <div className="p-6 space-y-3 max-h-96 overflow-y-auto">
+          {acceptedVolunteers.length === 0 ? (
+            <p className="text-center text-gray-400 py-8">No accepted volunteers for this opportunity.</p>
+          ) : (
+            acceptedVolunteers.map((vol: any) => (
+              <div key={vol._id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+                <div>
+                  <p className="font-medium text-gray-900 text-sm">{vol.name}</p>
+                  <p className="text-xs text-gray-500">{vol.email}</p>
+                </div>
+                {issuedIds.has(vol._id) ? (
+                  <span className="px-3 py-1 bg-emerald-100 text-emerald-700 text-xs font-medium rounded-full">Issued</span>
+                ) : (
+                  <button
+                    onClick={() => handleIssue(vol)}
+                    disabled={issuingId === vol._id}
+                    className="px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                  >
+                    {issuingId === vol._id ? 'Issuing...' : 'Issue'}
+                  </button>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+        <div className="px-6 py-4 border-t border-gray-100 flex justify-end">
+          <button onClick={onClose} className="px-4 py2 text-sm text-gray-600 hover:text-gray-800 font-medium">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── Main Component ───────────────────────────────────────────────────────────
+const OrganizerDashboard: React.FC = () => {
+  const { toast } = useToast();
+
+  // Tab state
+  const [activeTab, setActiveTab] = useState<'overview' | 'opportunities' | 'applicants'>('overview');
+
+  // Data state
+  const [stats, setStats] = useState<any>(null);
+  const [opportunities, setOpportunities] = useState<any[]>([]);
+  const [applicants, setApplicants] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Applicant action state
+  const [processingId, setProcessingId] = useState<string | null>(null);
+
+  // Opportunity manage menu state
+  const [showManageMenu, setShowManageMenu] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [editingOpp, setEditingOpp] = useState<any | null>(null);
+
+  // Certificate modal state
+  const [certModalOpp, setCertModalOpp] = useState<any | null>(null);
+  const [certVolunteers, setCertVolunteers] = useState<any[]>([]);
+
+  // Manage menu ref for click-outside
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // ── Data fetching ──────────────────────────────────────────────────────────
+  useEffect(() => {
+    fetchAll();
+  }, []);
+
+  // Close manage menu on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setShowManageMenu(null);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const fetchAll = async () => {
     setLoading(true);
+    setError(null);
     try {
-      await opportunityAPI.create({
-        title: formData.title,
-        description: formData.description,
-        category: formData.category,
-        location: { city: formData.city, address: formData.city },
-        dateTime: {
-          start: new Date(formData.start_date).toISOString(),
-          end: formData.end_date ? new Date(formData.end_date).toISOString() : undefined,
-          duration: formData.hours_per_volunteer,
-        },
-        requirements: { skills: formData.skills_required },
-        capacity: { required: formData.volunteers_needed },
-        community: formData.community,
-        contactInfo: { email: formData.contact_email },
-        isEmergency: formData.is_emergency,
-        tags: [formData.category],
-        impact: { description: formData.goal },
-      });
-      setCreateSuccess(true);
-      setFormData({
-        title: '', goal: '', city: '', category: 'Environment',
-        description: '', volunteers_needed: 20, hours_per_volunteer: 4,
-        start_date: '', end_date: '', skills_required: [], community: '',
-        contact_email: '', is_emergency: false,
-      });
-      const [statsData, oppsData] = await Promise.all([
+      const [statsRes, oppsRes, appsRes] = await Promise.all([
         organizerAPI.getStats(),
-        organizerAPI.getOpportunities({ status: 'all' }),
+        organizerAPI.getOpportunities(),
+        organizerAPI.getApplications(),
       ]);
-      if (statsData) setStats(s => ({ ...s, ...statsData }));
-      if (oppsData) setOpportunities(oppsData);
-      setTimeout(() => { setCreateSuccess(false); setActiveTab('opportunities'); }, 2000);
+      setStats(statsRes.data);
+      setOpportunities(oppsRes.data || []);
+      setApplicants(appsRes.data || []);
     } catch (err: any) {
-      setCreateError(err.message || 'Failed to create opportunity');
+      setError(err.message || 'Failed to load dashboard data');
     } finally {
       setLoading(false);
     }
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'active': return 'bg-emerald-100 text-emerald-700';
-      case 'pending': return 'bg-amber-100 text-amber-700';
-      case 'completed': return 'bg-blue-100 text-blue-700';
-      default: return 'bg-gray-100 text-gray-700';
+  // ── Applicant actions ──────────────────────────────────────────────────────
+  const handleApplicationAction = async (applicationId: string, status: 'accepted' | 'rejected') => {
+    setProcessingId(applicationId);
+    try {
+      await organizerAPI.updateApplicationStatus(applicationId, status);
+      // Optimistic update
+      setApplicants(prev =>
+        prev.map(a => (a._id === applicationId ? { ...a, status } : a))
+      );
+      toast({
+        title: status === 'accepted' ? 'Application accepted' : 'Application rejected',
+        description: `The application has been ${status}.`,
+      });
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to update application', variant: 'destructive' });
+    } finally {
+      setProcessingId(null);
     }
   };
 
-  return (
-    <div className="py-8">
-      {/* Header */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-8">
-        <div>
-          <div className="flex items-center gap-3 mb-2">
-            <h1 className="text-2xl font-bold text-gray-900">{user?.organization?.name || 'NGO Dashboard'}</h1>
-            {user?.isVerified && (
-              <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 text-xs font-medium rounded-full">
-                <ShieldCheckIcon size={12} />
-                Verified
-              </span>
-            )}
-          </div>
-          <p className="text-gray-500">Manage your volunteer opportunities and applicants</p>
-        </div>
-        <button
-          onClick={() => setActiveTab('create')}
-          className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white font-semibold rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all"
-        >
-          <PlusIcon size={20} />
-          {t('opp.create')}
+  // ── Opportunity actions ────────────────────────────────────────────────────
+  const handleDeleteOpportunity = async (oppId: string) => {
+    if (!window.confirm('Delete this opportunity? This cannot be undone.')) return;
+    setDeletingId(oppId);
+    try {
+      await opportunityAPI.delete(oppId);
+      setOpportunities(prev => prev.filter(o => o._id !== oppId));
+      toast({ title: 'Deleted', description: 'Opportunity deleted successfully.' });
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to delete', variant: 'destructive' });
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  // ── Certificate modal ──────────────────────────────────────────────────────
+  const openCertModal = async (opp: any) => {
+    try {
+      const res = await organizerAPI.getApplications({ opportunityId: opp._id, status: 'accepted' });
+      const accepted = (res.data || []).map((app: any) => ({
+        _id: app.volunteer?._id,
+        name: app.volunteer?.name,
+        email: app.volunteer?.email,
+      }));
+      setCertVolunteers(accepted);
+      setCertModalOpp(opp);
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to load volunteers', variant: 'destructive' });
+    }
+  };
+
+  // ── Edit form submit ───────────────────────────────────────────────────────
+  const handleEditSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!editingOpp) return;
+    const form = e.currentTarget;
+    const formData = new FormData(form);
+    const updated = {
+      title: formData.get('title') as string,
+      description: formData.get('description') as string,
+    };
+    try {
+      await opportunityAPI.update(editingOpp._id, updated);
+      setOpportunities(prev =>
+        prev.map(o => (o._id === editingOpp._id ? { ...o, ...updated } : o))
+      );
+      toast({ title: 'Updated', description: 'Opportunity updated successfully.' });
+      setEditingOpp(null);
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to update', variant: 'destructive' });
+    }
+  };
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+  const statusBadge = (status: string) => {
+    const map: Record<string, string> = {
+      published: 'bg-emerald-100 text-emerald-700',
+      draft: 'bg-gray-100 text-gray-600',
+      completed: 'bg-blue-100 text-blue-700',
+      cancelled: 'bg-red-100 text-red-600',
+      archived: 'bg-yellow-100 text-yellow-700',
+    };
+    return map[status] || 'bg-gray-100 text-gray-600';
+  };
+
+  const appStatusBadge = (status: string) => {
+    const map: Record<string, string> = {
+      accepted: 'bg-emerald-100 text-emerald-700',
+      rejected: 'bg-red-100 text-red-600',
+      pending: 'bg-yellow-100 text-yellow-700',
+    };
+    return map[status] || 'bg-gray-100 text-gray-600';
+  };
+
+  // ── Render ─────────────────────────────────────────────────────────────────
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-64">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-64 gap-4">
+        <p className="text-red-500">{error}</p>
+        <button onClick={fetchAll} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">
+          Retry
         </button>
       </div>
+    );
+  }
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        {statsCards.map((stat, index) => (
-          <div key={index} className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-            <div className={`w-12 h-12 ${stat.color} rounded-xl flex items-center justify-center mb-4`}>
-              <stat.icon size={24} className="text-white" />
+  return (
+    <div className="space-y-6">
+      {/* ── Stats ── */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[
+          { label: 'Active Opportunities', value: stats?.activeOpportunities ?? 0, icon: <CalendarIcon size={20} className="text-blue-500" /> },
+          { label: 'Total Applicants', value: stats?.totalApplicants ?? 0, icon: <UsersIcon size={20} className="text-emerald-500" /> },
+          { label: 'Total Views', value: stats?.totalViews ?? 0, icon: <EyeIcon size={20} className="text-purple-500" /> },
+          { label: 'Completed Events', value: stats?.completedEvents ?? 0, icon: <BarChartIcon size={20} className="text-orange-500" /> },
+        ].map(stat => (
+          <div key={stat.label} className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs text-gray-500 font-medium">{stat.label}</span>
+              {stat.icon}
             </div>
-            <p className="text-3xl font-bold text-gray-900 mb-1">{stat.value}</p>
-            <p className="text-gray-500 text-sm">{stat.label}</p>
+            <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
           </div>
         ))}
       </div>
 
-      {/* Tabs */}
+      {/* ── Tabs ── */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="border-b border-gray-100">
-          <div className="flex overflow-x-auto">
-            {[
-              { id: 'overview', label: 'Overview' },
-              { id: 'opportunities', label: 'My Opportunities' },
-              { id: 'applicants', label: 'Applicants' },
-              { id: 'create', label: t('opp.create') }
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
-                className={`flex-shrink-0 px-6 py-4 text-sm font-medium transition-colors relative ${
-                  activeTab === tab.id
-                    ? 'text-blue-600'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                {tab.label}
-                {activeTab === tab.id && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600" />
-                )}
-              </button>
-            ))}
-          </div>
+        <div className="flex border-b border-gray-100">
+          {(['overview', 'opportunities', 'applicants'] as const).map(tab => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`px-6 py-4 text-sm font-medium capitalize transition-colors ${
+                activeTab === tab
+                  ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/50'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {tab === 'overview' && <SparklesIcon size={14} className="inline mr-1.5 -mt-0.5" />}
+              {tab === 'opportunities' && <CalendarIcon size={14} className="inline mr-1.5 -mt-0.5" />}
+              {tab === 'applicants' && <UsersIcon size={14} className="inline mr-1.5 -mt-0.5" />}
+              {tab}
+            </button>
+          ))}
         </div>
 
         <div className="p-6">
+          {/* ── Overview Tab ── */}
           {activeTab === 'overview' && (
-            <div className="space-y-6">
-              {/* Quick Stats Chart Placeholder */}
-              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-gray-900">Performance Overview</h3>
-                  <BarChartIcon size={24} className="text-blue-600" />
-                </div>
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="bg-white rounded-xl p-4 text-center">
-                    <p className="text-2xl font-bold text-blue-600">{stats.applicationRate || 0}%</p>
-                    <p className="text-sm text-gray-500">Application Rate</p>
-                  </div>
-                  <div className="bg-white rounded-xl p-4 text-center">
-                    <p className="text-2xl font-bold text-emerald-600">{stats.completionRate || 0}%</p>
-                    <p className="text-sm text-gray-500">Completion Rate</p>
-                  </div>
-                  <div className="bg-white rounded-xl p-4 text-center">
-                    <p className="text-2xl font-bold text-purple-600">{stats.averageRating || 0}</p>
-                    <p className="text-sm text-gray-500">Avg Rating</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Recent Opportunities */}
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Opportunities</h3>
+            <div className="space-y-4">
+              <h3 className="text-base font-semibold text-gray-900">Recent Activity</h3>
+              {opportunities.length === 0 && applicants.length === 0 ? (
+                <p className="text-gray-400 text-sm">No activity yet. Create your first opportunity to get started.</p>
+              ) : (
                 <div className="space-y-3">
-                  {opportunitiesData.slice(0, 3).map((opp) => (
-                    <div key={opp.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
-                      <div>
-                        <p className="font-medium text-gray-900">{opp.title}</p>
-                        <p className="text-sm text-gray-500">{opp.applicants} applicants • {opp.views} views</p>
+                  {applicants.slice(0, 5).map(app => (
+                    <div key={app._id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
+                      <img
+                        src={
+                          app.volunteer?.profile?.avatar ||
+                          `https://ui-avatars.com/api/?name=${encodeURIComponent(app.volunteer?.name || 'V')}&background=3b82f6&color=fff&size=32`
+                        }
+                        alt={app.volunteer?.name}
+                        className="w-8 h-8 rounded-full object-cover"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">
+                          {app.volunteer?.name || 'Unknown volunteer'}
+                        </p>
+                        <p className="text-xs text-gray-500 truncate">
+                          Applied to: {app.opportunity?.title || '—'}
+                        </p>
                       </div>
-                      <span className={`px-3 py-1 text-xs font-medium rounded-full ${getStatusColor(opp.status)}`}>
-                        {opp.status}
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${appStatusBadge(app.status)}`}>
+                        {app.status}
                       </span>
                     </div>
                   ))}
                 </div>
-              </div>
+              )}
             </div>
           )}
 
+          {/* ── Opportunities Tab ── */}
           {activeTab === 'opportunities' && (
             <div className="space-y-4">
-              {opportunitiesData.map((opp) => (
-                <div key={opp.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-1">
-                      <p className="font-semibold text-gray-900">{opp.title}</p>
-                      <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${getStatusColor(opp.status)}`}>
-                        {opp.status}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-4 text-sm text-gray-500">
-                      <span className="flex items-center gap-1">
-                        <UsersIcon size={14} />
-                        {opp.applicants} applicants
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <EyeIcon size={14} />
-                        {opp.views} views
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <CalendarIcon size={14} />
-                        {opp.date}
-                      </span>
-                    </div>
-                  </div>
-                  <button className="px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors font-medium">
-                    Manage
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {activeTab === 'applicants' && (
-            <div className="space-y-4">
-              {applicantsData.map((applicant) => (
-                <div key={applicant.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
-                  <div className="flex items-center gap-4">
-                    <img
-                      src={applicant.avatar}
-                      alt={applicant.name}
-                      className="w-12 h-12 rounded-xl"
-                    />
-                    <div>
-                      <p className="font-semibold text-gray-900">{applicant.name}</p>
-                      <p className="text-sm text-gray-500">Applied for: {applicant.event}</p>
-                      <div className="flex gap-1 mt-1">
-                        {applicant.skills.map((skill, i) => (
-                          <span key={i} className="px-2 py-0.5 bg-gray-200 text-gray-600 text-xs rounded">
-                            {skill}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                  {applicant.status === 'pending' ? (
-                    <div className="flex gap-2">
-                      <button className="p-2 bg-emerald-100 text-emerald-600 rounded-lg hover:bg-emerald-200 transition-colors">
-                        <CheckIcon size={20} />
-                      </button>
-                      <button className="p-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors">
-                        <XIcon size={20} />
-                      </button>
-                    </div>
-                  ) : (
-                    <span className={`px-3 py-1 text-xs font-medium rounded-full ${getStatusColor(applicant.status)}`}>
-                      {applicant.status}
-                    </span>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {activeTab === 'create' && (
-            <div className="max-w-2xl">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-semibold text-gray-900">Create New Opportunity</h3>
-                <button onClick={handleAIAssist} disabled={isGenerating}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-medium rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-all disabled:opacity-50">
-                  <SparklesIcon size={18} />
-                  {isGenerating ? 'Generating...' : 'AI Assist'}
-                </button>
+              <div className="flex items-center justify-between">
+                <h3 className="text-base font-semibold text-gray-900">My Opportunities</h3>
+                <a
+                  href="/opportunities/create"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  <PlusIcon size={14} />
+                  New
+                </a>
               </div>
 
-              {createSuccess && (
-                <div className="mb-4 p-4 bg-green-50 border border-green-200 text-green-700 rounded-xl font-medium">
-                  ✓ Opportunity created successfully! Redirecting to your opportunities...
+              {/* Edit form */}
+              {editingOpp && (
+                <div className="border border-blue-200 bg-blue-50 rounded-xl p-4">
+                  <h4 className="text-sm font-semibold text-blue-800 mb-3">Edit Opportunity</h4>
+                  <form onSubmit={handleEditSubmit} className="space-y-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Title</label>
+                      <input
+                        name="title"
+                        defaultValue={editingOpp.title}
+                        required
+                        className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Description</label>
+                      <textarea
+                        name="description"
+                        defaultValue={editingOpp.description}
+                        rows={3}
+                        className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <button type="submit" className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700">
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditingOpp(null)}
+                        className="px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
                 </div>
               )}
-              {createError && (
-                <div className="mb-4 p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm">
-                  {createError}
+
+              {opportunities.length === 0 ? (
+                <p className="text-gray-400 text-sm">No opportunities yet.</p>
+              ) : (
+                <div className="space-y-3">
+                  {opportunities.map(opp => (
+                    <div key={opp._id} className="flex items-start justify-between p-4 bg-gray-50 rounded-xl gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-sm font-semibold text-gray-900 truncate">{opp.title}</p>
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusBadge(opp.status)}`}>
+                            {opp.status}
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-0.5 truncate">{opp.description}</p>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        {/* Issue Certificates button for completed opps */}
+                        {opp.status === 'completed' && (
+                          <button
+                            onClick={() => openCertModal(opp)}
+                            className="flex items-center gap-1 px-2.5 py-1.5 bg-purple-600 text-white text-xs font-medium rounded-lg hover:bg-purple-700 transition-colors"
+                          >
+                            <ShieldCheckIcon size={12} />
+                            Certificates
+                          </button>
+                        )}
+
+                        {/* Manage dropdown */}
+                        <div className="relative" ref={showManageMenu === opp._id ? menuRef : undefined}>
+                          <button
+                            onClick={() => setShowManageMenu(prev => (prev === opp._id ? null : opp._id))}
+                            className="px-3 py-1.5 bg-white border border-gray-200 text-gray-700 text-xs font-medium rounded-lg hover:bg-gray-50 transition-colors"
+                          >
+                            Manage ▾
+                          </button>
+                          {showManageMenu === opp._id && (
+                            <div className="absolute right-0 top-full mt-1 w-36 bg-white border border-gray-100 rounded-xl shadow-lg z-20 overflow-hidden">
+                              <button
+                                onClick={() => {
+                                  setEditingOpp(opp);
+                                  setShowManageMenu(null);
+                                }}
+                                className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                              >
+                                ✏️ Edit
+                              </button>
+                              <button
+                                onClick={() => {
+                                  window.location.href = `/opportunities/${opp._id}`;
+                                }}
+                                className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                              >
+                                <EyeIcon size={14} /> View
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setShowManageMenu(null);
+                                  handleDeleteOpportunity(opp._id);
+                                }}
+                                disabled={deletingId === opp._id}
+                                className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 disabled:opacity-50"
+                              >
+                                🗑️ {deletingId === opp._id ? 'Deleting…' : 'Delete'}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
+            </div>
+          )}
 
-              <form onSubmit={handleCreateOpportunity} className="space-y-5">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Title <span className="text-red-500">*</span></label>
-                    <input type="text" value={formData.title}
-                      onChange={e => setFormData(p => ({ ...p, title: e.target.value }))}
-                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm"
-                      placeholder="e.g., Beach Cleanup Drive" required />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Category <span className="text-red-500">*</span></label>
-                    <select value={formData.category} onChange={e => setFormData(p => ({ ...p, category: e.target.value }))}
-                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm bg-white">
-                      {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                    </select>
-                  </div>
+          {/* ── Applicants Tab ── */}
+          {activeTab === 'applicants' && (
+            <div className="space-y-4">
+              <h3 className="text-base font-semibold text-gray-900">Applicants</h3>
+              {applicants.length === 0 ? (
+                <p className="text-gray-400 text-sm">No applications yet.</p>
+              ) : (
+                <div className="space-y-3">
+                  {applicants.map(app => (
+                    <div key={app._id} className="flex items-center gap-3 p-4 bg-gray-50 rounded-xl">
+                      <img
+                        src={
+                          app.volunteer?.profile?.avatar ||
+                          `https://ui-avatars.com/api/?name=${encodeURIComponent(app.volunteer?.name || 'V')}&background=3b82f6&color=fff&size=40`
+                        }
+                        alt={app.volunteer?.name}
+                        className="w-10 h-10 rounded-full object-cover shrink-0"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-gray-900 truncate">
+                          {app.volunteer?.name || 'Unknown volunteer'}
+                        </p>
+                        <p className="text-xs text-gray-500 truncate">
+                          {app.opportunity?.title || '—'}
+                        </p>
+                        {app.volunteer?.profile?.skills?.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {app.volunteer.profile.skills.slice(0, 3).map((skill: string) => (
+                              <span key={skill} className="px-1.5 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-md">
+                                {skill}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        {app.status === 'pending' ? (
+                          <>
+                            <button
+                              onClick={() => handleApplicationAction(app._id, 'accepted')}
+                              disabled={processingId === app._id}
+                              className="flex items-center gap-1 px-3 py-1.5 bg-emerald-600 text-white text-xs font-medium rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                            >
+                              <CheckIcon size={12} />
+                              {processingId === app._id ? '…' : 'Accept'}
+                            </button>
+                            <button
+                              onClick={() => handleApplicationAction(app._id, 'rejected')}
+                              disabled={processingId === app._id}
+                              className="flex items-center gap-1 px-3 py-1.5 bg-red-500 text-white text-xs font-medium rounded-lg hover:bg-red-600 disabled:opacity-50 transition-colors"
+                            >
+                              <XIcon size={12} />
+                              {processingId === app._id ? '…' : 'Reject'}
+                            </button>
+                          </>
+                        ) : (
+                          <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${appStatusBadge(app.status)}`}>
+                            {app.status}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Community <span className="text-red-500">*</span></label>
-                  <select value={formData.community} onChange={e => setFormData(p => ({ ...p, community: e.target.value }))}
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm bg-white" required>
-                    <option value="">Select a community</option>
-                    {communities.map((c: any) => <option key={c._id} value={c._id}>{c.name}</option>)}
-                  </select>
-                  {communities.length === 0 && (
-                    <p className="text-xs text-amber-600 mt-1">No communities found. <a href="/communities" className="underline">Create one first</a>.</p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Goal / Objective</label>
-                  <input type="text" value={formData.goal}
-                    onChange={e => setFormData(p => ({ ...p, goal: e.target.value }))}
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm"
-                    placeholder="What do you want to achieve?" />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">City / Location</label>
-                  <input type="text" value={formData.city}
-                    onChange={e => setFormData(p => ({ ...p, city: e.target.value }))}
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm"
-                    placeholder="e.g., Douala" />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Description <span className="text-red-500">*</span></label>
-                  <textarea value={formData.description}
-                    onChange={e => setFormData(p => ({ ...p, description: e.target.value }))}
-                    rows={4} required
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm resize-none"
-                    placeholder="Describe the opportunity, what volunteers will do, and the impact..." />
-                </div>
-
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Start Date <span className="text-red-500">*</span></label>
-                    <input type="date" value={formData.start_date}
-                      onChange={e => setFormData(p => ({ ...p, start_date: e.target.value }))} required
-                      className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">End Date</label>
-                    <input type="date" value={formData.end_date}
-                      onChange={e => setFormData(p => ({ ...p, end_date: e.target.value }))}
-                      className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Volunteers Needed</label>
-                    <input type="number" min={1} value={formData.volunteers_needed}
-                      onChange={e => setFormData(p => ({ ...p, volunteers_needed: parseInt(e.target.value) || 1 }))}
-                      className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Hours/Volunteer</label>
-                    <input type="number" min={1} value={formData.hours_per_volunteer}
-                      onChange={e => setFormData(p => ({ ...p, hours_per_volunteer: parseInt(e.target.value) || 1 }))}
-                      className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm" />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Required Skills</label>
-                  <div className="flex gap-2 mb-2">
-                    <input type="text" value={skillInput} onChange={e => setSkillInput(e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); if (skillInput.trim()) { setFormData(p => ({ ...p, skills_required: [...p.skills_required, skillInput.trim()] })); setSkillInput(''); } } }}
-                      className="flex-1 px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                      placeholder="Type a skill and press Enter" />
-                    <button type="button" onClick={() => { if (skillInput.trim()) { setFormData(p => ({ ...p, skills_required: [...p.skills_required, skillInput.trim()] })); setSkillInput(''); } }}
-                      className="px-3 py-2 bg-blue-100 text-blue-700 rounded-xl text-sm font-medium hover:bg-blue-200">Add</button>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {formData.skills_required.map((skill, i) => (
-                      <span key={i} className="inline-flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm">
-                        {skill}
-                        <button type="button" onClick={() => setFormData(p => ({ ...p, skills_required: p.skills_required.filter((_, j) => j !== i) }))}
-                          className="text-blue-500 hover:text-blue-700 ml-1">×</button>
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Contact Email</label>
-                    <input type="email" value={formData.contact_email}
-                      onChange={e => setFormData(p => ({ ...p, contact_email: e.target.value }))}
-                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm"
-                      placeholder="contact@org.com" />
-                  </div>
-                  <div className="flex items-center gap-3 pt-6">
-                    <input type="checkbox" id="emergency" checked={formData.is_emergency}
-                      onChange={e => setFormData(p => ({ ...p, is_emergency: e.target.checked }))}
-                      className="w-4 h-4 rounded border-gray-300" />
-                    <label htmlFor="emergency" className="text-sm font-medium text-gray-700">🚨 Mark as Emergency</label>
-                  </div>
-                </div>
-
-                <button type="submit" disabled={loading}
-                  className="w-full py-3.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white font-semibold rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all disabled:opacity-50">
-                  {loading ? 'Creating...' : 'Create Opportunity'}
-                </button>
-              </form>
+              )}
             </div>
           )}
         </div>
       </div>
+
+      {/* ── Certificate Modal ── */}
+      {certModalOpp && (
+        <CertificateModal
+          opportunity={certModalOpp}
+          acceptedVolunteers={certVolunteers}
+          onClose={() => { setCertModalOpp(null); setCertVolunteers([]); }}
+        />
+      )}
     </div>
   );
 };
