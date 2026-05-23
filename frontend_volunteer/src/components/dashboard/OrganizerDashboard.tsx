@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/NewAuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { organizerAPI, opportunityAPI } from '@/lib/api';
+import { organizerAPI, opportunityAPI, communityAPI } from '@/lib/api';
 import {
   PlusIcon,
   UsersIcon,
@@ -53,14 +53,22 @@ const OrganizerDashboard: React.FC = () => {
   const [formData, setFormData] = useState({
     title: '',
     goal: '',
-    location: '',
+    city: '',
     category: 'Environment',
     description: '',
     volunteers_needed: 20,
     hours_per_volunteer: 4,
     start_date: '',
-    skills_required: [] as string[]
+    end_date: '',
+    skills_required: [] as string[],
+    community: '',
+    contact_email: '',
+    is_emergency: false,
   });
+  const [skillInput, setSkillInput] = useState('');
+  const [createError, setCreateError] = useState('');
+  const [createSuccess, setCreateSuccess] = useState(false);
+  const [communities, setCommunities] = useState<any[]>([]);
 
   const statsCards = [
     { label: 'Active Opportunities', value: stats.activeOpportunities || 0, icon: CalendarIcon, color: 'bg-blue-500' },
@@ -126,27 +134,78 @@ const OrganizerDashboard: React.FC = () => {
 
     if (user) {
       loadDashboardData();
+      // Load communities for the opportunity form
+      communityAPI.getAll({ limit: 50 }).then((res: any) => {
+        setCommunities(res.data || res || []);
+      }).catch(() => {});
     }
   }, [user]);
 
   const handleAIAssist = async () => {
-    if (!formData.title || !formData.goal || !formData.location) {
-      alert('Please fill in title, goal, and location first');
+    if (!formData.title || !formData.goal || !formData.city) {
+      alert('Please fill in title, goal, and city first');
       return;
     }
-
     setIsGenerating(true);
     try {
-      // Mock AI response for now
       setFormData(prev => ({
         ...prev,
-        description: `Join us for ${formData.title} at ${formData.location}. This ${formData.category.toLowerCase()} initiative aims to ${formData.goal}. Your participation will make a real difference in our community. We welcome volunteers of all backgrounds and experience levels.`,
+        description: `Join us for ${formData.title} in ${formData.city}. This ${formData.category.toLowerCase()} initiative aims to ${formData.goal}. Your participation will make a real difference in our community. We welcome volunteers of all backgrounds and experience levels.`,
         skills_required: ['Teamwork', 'Communication', 'Enthusiasm']
       }));
     } catch (err) {
       console.error('AI assist error:', err);
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  const handleCreateOpportunity = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCreateError('');
+    setCreateSuccess(false);
+    if (!formData.title.trim()) return setCreateError('Title is required');
+    if (!formData.description.trim()) return setCreateError('Description is required');
+    if (!formData.start_date) return setCreateError('Start date is required');
+    if (!formData.community) return setCreateError('Please select a community');
+    setLoading(true);
+    try {
+      await opportunityAPI.create({
+        title: formData.title,
+        description: formData.description,
+        category: formData.category,
+        location: { city: formData.city, address: formData.city },
+        dateTime: {
+          start: new Date(formData.start_date).toISOString(),
+          end: formData.end_date ? new Date(formData.end_date).toISOString() : undefined,
+          duration: formData.hours_per_volunteer,
+        },
+        requirements: { skills: formData.skills_required },
+        capacity: { required: formData.volunteers_needed },
+        community: formData.community,
+        contactInfo: { email: formData.contact_email },
+        isEmergency: formData.is_emergency,
+        tags: [formData.category],
+        impact: { description: formData.goal },
+      });
+      setCreateSuccess(true);
+      setFormData({
+        title: '', goal: '', city: '', category: 'Environment',
+        description: '', volunteers_needed: 20, hours_per_volunteer: 4,
+        start_date: '', end_date: '', skills_required: [], community: '',
+        contact_email: '', is_emergency: false,
+      });
+      const [statsData, oppsData] = await Promise.all([
+        organizerAPI.getStats(),
+        organizerAPI.getOpportunities({ status: 'all' }),
+      ]);
+      if (statsData) setStats(s => ({ ...s, ...statsData }));
+      if (oppsData) setOpportunities(oppsData);
+      setTimeout(() => { setCreateSuccess(false); setActiveTab('opportunities'); }, 2000);
+    } catch (err: any) {
+      setCreateError(err.message || 'Failed to create opportunity');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -165,8 +224,8 @@ const OrganizerDashboard: React.FC = () => {
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-8">
         <div>
           <div className="flex items-center gap-3 mb-2">
-            <h1 className="text-2xl font-bold text-gray-900">{user?.organization_name || 'NGO Dashboard'}</h1>
-            {user?.is_verified && (
+            <h1 className="text-2xl font-bold text-gray-900">{user?.organization?.name || 'NGO Dashboard'}</h1>
+            {user?.isVerified && (
               <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 text-xs font-medium rounded-full">
                 <ShieldCheckIcon size={12} />
                 Verified
@@ -349,123 +408,146 @@ const OrganizerDashboard: React.FC = () => {
             <div className="max-w-2xl">
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-lg font-semibold text-gray-900">Create New Opportunity</h3>
-                <button
-                  onClick={handleAIAssist}
-                  disabled={isGenerating}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-medium rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-all disabled:opacity-50"
-                >
+                <button onClick={handleAIAssist} disabled={isGenerating}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-medium rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-all disabled:opacity-50">
                   <SparklesIcon size={18} />
-                  {isGenerating ? 'Generating...' : t('opp.aiAssist')}
+                  {isGenerating ? 'Generating...' : 'AI Assist'}
                 </button>
               </div>
 
-              <form className="space-y-6">
+              {createSuccess && (
+                <div className="mb-4 p-4 bg-green-50 border border-green-200 text-green-700 rounded-xl font-medium">
+                  ✓ Opportunity created successfully! Redirecting to your opportunities...
+                </div>
+              )}
+              {createError && (
+                <div className="mb-4 p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm">
+                  {createError}
+                </div>
+              )}
+
+              <form onSubmit={handleCreateOpportunity} className="space-y-5">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Title *</label>
-                    <input
-                      type="text"
-                      value={formData.title}
-                      onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
-                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="e.g., Beach Cleanup Drive"
-                    />
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Title <span className="text-red-500">*</span></label>
+                    <input type="text" value={formData.title}
+                      onChange={e => setFormData(p => ({ ...p, title: e.target.value }))}
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                      placeholder="e.g., Beach Cleanup Drive" required />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Category *</label>
-                    <select
-                      value={formData.category}
-                      onChange={(e) => setFormData(prev => ({ ...prev, category: e.target.value }))}
-                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                      {categories.map((cat) => (
-                        <option key={cat} value={cat}>{cat}</option>
-                      ))}
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Category <span className="text-red-500">*</span></label>
+                    <select value={formData.category} onChange={e => setFormData(p => ({ ...p, category: e.target.value }))}
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm bg-white">
+                      {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                     </select>
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Goal *</label>
-                  <input
-                    type="text"
-                    value={formData.goal}
-                    onChange={(e) => setFormData(prev => ({ ...prev, goal: e.target.value }))}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="What do you want to achieve?"
-                  />
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Community <span className="text-red-500">*</span></label>
+                  <select value={formData.community} onChange={e => setFormData(p => ({ ...p, community: e.target.value }))}
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm bg-white" required>
+                    <option value="">Select a community</option>
+                    {communities.map((c: any) => <option key={c._id} value={c._id}>{c.name}</option>)}
+                  </select>
+                  {communities.length === 0 && (
+                    <p className="text-xs text-amber-600 mt-1">No communities found. <a href="/communities" className="underline">Create one first</a>.</p>
+                  )}
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Location *</label>
-                  <input
-                    type="text"
-                    value={formData.location}
-                    onChange={(e) => setFormData(prev => ({ ...prev, location: e.target.value }))}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="e.g., Limbe Beach, Cameroon"
-                  />
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Goal / Objective</label>
+                  <input type="text" value={formData.goal}
+                    onChange={e => setFormData(p => ({ ...p, goal: e.target.value }))}
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                    placeholder="What do you want to achieve?" />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
-                  <textarea
-                    value={formData.description}
-                    onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                    rows={5}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Describe your volunteer opportunity..."
-                  />
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">City / Location</label>
+                  <input type="text" value={formData.city}
+                    onChange={e => setFormData(p => ({ ...p, city: e.target.value }))}
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                    placeholder="e.g., Douala" />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Description <span className="text-red-500">*</span></label>
+                  <textarea value={formData.description}
+                    onChange={e => setFormData(p => ({ ...p, description: e.target.value }))}
+                    rows={4} required
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm resize-none"
+                    placeholder="Describe the opportunity, what volunteers will do, and the impact..." />
+                </div>
+
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Volunteers Needed</label>
-                    <input
-                      type="number"
-                      value={formData.volunteers_needed}
-                      onChange={(e) => setFormData(prev => ({ ...prev, volunteers_needed: parseInt(e.target.value) }))}
-                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Start Date <span className="text-red-500">*</span></label>
+                    <input type="date" value={formData.start_date}
+                      onChange={e => setFormData(p => ({ ...p, start_date: e.target.value }))} required
+                      className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm" />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Hours per Volunteer</label>
-                    <input
-                      type="number"
-                      value={formData.hours_per_volunteer}
-                      onChange={(e) => setFormData(prev => ({ ...prev, hours_per_volunteer: parseInt(e.target.value) }))}
-                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">End Date</label>
+                    <input type="date" value={formData.end_date}
+                      onChange={e => setFormData(p => ({ ...p, end_date: e.target.value }))}
+                      className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm" />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
-                    <input
-                      type="date"
-                      value={formData.start_date}
-                      onChange={(e) => setFormData(prev => ({ ...prev, start_date: e.target.value }))}
-                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Volunteers Needed</label>
+                    <input type="number" min={1} value={formData.volunteers_needed}
+                      onChange={e => setFormData(p => ({ ...p, volunteers_needed: parseInt(e.target.value) || 1 }))}
+                      className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Hours/Volunteer</label>
+                    <input type="number" min={1} value={formData.hours_per_volunteer}
+                      onChange={e => setFormData(p => ({ ...p, hours_per_volunteer: parseInt(e.target.value) || 1 }))}
+                      className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm" />
                   </div>
                 </div>
 
-                {formData.skills_required.length > 0 && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Suggested Skills</label>
-                    <div className="flex flex-wrap gap-2">
-                      {formData.skills_required.map((skill, i) => (
-                        <span key={i} className="px-3 py-1.5 bg-blue-100 text-blue-700 rounded-lg text-sm font-medium">
-                          {skill}
-                        </span>
-                      ))}
-                    </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Required Skills</label>
+                  <div className="flex gap-2 mb-2">
+                    <input type="text" value={skillInput} onChange={e => setSkillInput(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); if (skillInput.trim()) { setFormData(p => ({ ...p, skills_required: [...p.skills_required, skillInput.trim()] })); setSkillInput(''); } } }}
+                      className="flex-1 px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                      placeholder="Type a skill and press Enter" />
+                    <button type="button" onClick={() => { if (skillInput.trim()) { setFormData(p => ({ ...p, skills_required: [...p.skills_required, skillInput.trim()] })); setSkillInput(''); } }}
+                      className="px-3 py-2 bg-blue-100 text-blue-700 rounded-xl text-sm font-medium hover:bg-blue-200">Add</button>
                   </div>
-                )}
+                  <div className="flex flex-wrap gap-2">
+                    {formData.skills_required.map((skill, i) => (
+                      <span key={i} className="inline-flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm">
+                        {skill}
+                        <button type="button" onClick={() => setFormData(p => ({ ...p, skills_required: p.skills_required.filter((_, j) => j !== i) }))}
+                          className="text-blue-500 hover:text-blue-700 ml-1">×</button>
+                      </span>
+                    ))}
+                  </div>
+                </div>
 
-                <button
-                  type="submit"
-                  className="w-full py-4 bg-gradient-to-r from-blue-600 to-blue-700 text-white font-semibold rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all"
-                >
-                  Create Opportunity
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Contact Email</label>
+                    <input type="email" value={formData.contact_email}
+                      onChange={e => setFormData(p => ({ ...p, contact_email: e.target.value }))}
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                      placeholder="contact@org.com" />
+                  </div>
+                  <div className="flex items-center gap-3 pt-6">
+                    <input type="checkbox" id="emergency" checked={formData.is_emergency}
+                      onChange={e => setFormData(p => ({ ...p, is_emergency: e.target.checked }))}
+                      className="w-4 h-4 rounded border-gray-300" />
+                    <label htmlFor="emergency" className="text-sm font-medium text-gray-700">🚨 Mark as Emergency</label>
+                  </div>
+                </div>
+
+                <button type="submit" disabled={loading}
+                  className="w-full py-3.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white font-semibold rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all disabled:opacity-50">
+                  {loading ? 'Creating...' : 'Create Opportunity'}
                 </button>
               </form>
             </div>
