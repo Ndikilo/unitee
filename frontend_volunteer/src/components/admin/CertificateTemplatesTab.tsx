@@ -196,7 +196,7 @@ const CertificateTemplatesTab: React.FC = () => {
         <div className="text-center mb-8">
           <img src="/logo.png" alt="UNITEE" className="h-16 mx-auto mb-4 object-contain" />
           <div className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: t.accentColor }}>
-            UNITEE — Volunteering for Youths
+            UNITEE - Volunteering for Youths
           </div>
           <h1 className="text-3xl font-extrabold text-gray-900 mb-1">{fill(t.title)}</h1>
           <p className="text-gray-500 text-sm">{fill(t.description)}</p>
@@ -266,7 +266,7 @@ const CertificateTemplatesTab: React.FC = () => {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h2 className="text-xl font-bold text-gray-900">{editing ? 'Edit Template' : 'New Certificate Template'}</h2>
-            <p className="text-sm text-gray-500 mt-0.5">Use {`{{variable}}`} placeholders — they'll be replaced with real data when issued</p>
+            <p className="text-sm text-gray-500 mt-0.5">Use {`{{variable}}`} placeholders - they'll be replaced with real data when issued</p>
           </div>
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => setView('list')} disabled={saving}><X size={16} className="mr-2" />Cancel</Button>

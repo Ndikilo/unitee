@@ -1,8 +1,12 @@
-const User = require('../models/User');
+const Volunteer = require('../models/Volunteer');
+const Organization = require('../models/Organization');
 const Opportunity = require('../models/Opportunity');
 const Application = require('../models/Application');
+const Notification = require('../models/Notification');
+const User = require('../models/User');
 const ErrorResponse = require('../utils/errorResponse');
 const asyncHandler = require('../middleware/async');
+const { checkAndAwardBadges } = require('../utils/badgeSystem');
 
 // @desc      Get organizer stats
 // @route     GET /api/organizer/stats
@@ -78,7 +82,6 @@ exports.getOpportunities = asyncHandler(async (req, res, next) => {
 // @route     GET /api/organizer/applications
 // @access    Private (Organizer only)
 exports.getApplications = asyncHandler(async (req, res, next) => {
-  // Verify user is an organizer
   if (req.userType !== 'organization') {
     return next(new ErrorResponse('Access denied. Organizer role required.', 403));
   }
@@ -100,8 +103,13 @@ exports.getApplications = asyncHandler(async (req, res, next) => {
   }
 
   const applications = await Application.find(query)
-    .populate('volunteer', 'name email profile.skills')
-    .populate('opportunity', 'title description');
+    .populate({
+      path: 'volunteer',
+      model: 'Volunteer',
+      select: 'name email profile stats'
+    })
+    .populate('opportunity', 'title description dateTime location')
+    .sort({ createdAt: -1 });
 
   res.status(200).json({
     success: true,
@@ -142,12 +150,34 @@ exports.updateApplicationStatus = asyncHandler(async (req, res, next) => {
   application = await Application.findByIdAndUpdate(
     req.params.id,
     { status },
-    {
-      new: true,
-      runValidators: true
+    { new: true, runValidators: true }
+  ).populate({ path: 'volunteer', model: 'Volunteer', select: 'name email profile stats' })
+   .populate('opportunity', 'title description');
+
+  // Notify the volunteer — try both User and Volunteer collections
+  try {
+    const volunteerId = application.volunteer?._id ?? application.volunteer;
+    if (volunteerId) {
+      const notifTitle = status === 'accepted'
+        ? '🎉 Application Accepted'
+        : 'Application Update';
+      const notifMsg = status === 'accepted'
+        ? `Your application for "${application.opportunity?.title}" has been accepted. We look forward to seeing you!`
+        : `Your application for "${application.opportunity?.title}" was not accepted this time. Keep volunteering!`;
+
+      await Notification.create({
+        recipient: volunteerId,
+        type: 'opportunity',
+        title: notifTitle,
+        message: notifMsg,
+        priority: status === 'accepted' ? 'high' : 'medium',
+        data: { opportunityId: application.opportunity?._id },
+      });
     }
-  ).populate('volunteer', 'name email profile.skills')
-    .populate('opportunity', 'title description');
+  } catch (notifErr) {
+    // Non-fatal — log but don't block the response
+    console.error('Notification creation failed:', notifErr.message);
+  }
 
   res.status(200).json({
     success: true,
@@ -186,11 +216,27 @@ exports.updateOpportunityStatus = asyncHandler(async (req, res, next) => {
   opportunity = await Opportunity.findByIdAndUpdate(
     req.params.id,
     { status },
-    {
-      new: true,
-      runValidators: true
-    }
+    { new: true, runValidators: true }
   );
+
+  // When marked completed, credit each attended/confirmed volunteer with the event
+  // and trigger badge evaluation for each of them
+  if (status === 'completed') {
+    const attendedVolunteers = opportunity.volunteers
+      .filter(v => ['attended', 'confirmed', 'registered'].includes(v.status))
+      .map(v => v.user);
+
+    if (attendedVolunteers.length > 0) {
+      // Increment totalEvents for every volunteer (fire-and-forget, non-blocking)
+      User.updateMany(
+        { _id: { $in: attendedVolunteers } },
+        { $inc: { 'stats.totalEvents': 1 } }
+      ).then(() => {
+        // Check badges for each volunteer after stats are updated
+        return Promise.allSettled(attendedVolunteers.map(uid => checkAndAwardBadges(uid)));
+      }).catch(err => console.error('Badge award on completion failed:', err));
+    }
+  }
 
   res.status(200).json({
     success: true,
@@ -232,12 +278,11 @@ exports.generateOpportunityContent = asyncHandler(async (req, res, next) => {
 // @route     GET /api/organizer/profile
 // @access    Private (Organizer only)
 exports.getProfile = asyncHandler(async (req, res, next) => {
-  // Verify user is an organizer
   if (req.userType !== 'organization') {
     return next(new ErrorResponse('Access denied. Organizer role required.', 403));
   }
 
-  const organizer = await User.findById(req.user._id).select('-password');
+  const organizer = await Organization.findById(req.user._id).select('-account.password');
 
   res.status(200).json({
     success: true,

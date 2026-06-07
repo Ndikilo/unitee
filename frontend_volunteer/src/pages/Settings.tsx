@@ -11,6 +11,7 @@ import { useAuth } from '@/contexts/NewAuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '@/components/DashboardLayout';
+import BackButton from '@/components/ui/BackButton';
 
 type Tab = 'security' | 'notifications' | 'privacy' | 'account';
 
@@ -114,6 +115,7 @@ const Settings: React.FC = () => {
   return (
     <DashboardLayout>
       <div className="max-w-3xl mx-auto">
+        <BackButton />
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
           <p className="text-sm text-gray-500 mt-0.5">Manage your account security and preferences</p>

@@ -46,10 +46,7 @@ const AdminDashboard: React.FC = () => {
     pendingReports: 0,
     totalUsers: 0,
     activeEmergencies: 0,
-    uptime: 0,
-    avgResponse: 0,
     dailyActive: 0,
-    errorRate: 0
   });
   const [verificationQueue, setVerificationQueue] = useState([]);
   const [reports, setReports] = useState([]);
@@ -84,10 +81,7 @@ const AdminDashboard: React.FC = () => {
         pendingReports: statsData.pendingReports || 0,
         totalUsers: statsData.totalUsers || 0,
         activeEmergencies: statsData.activeEmergencies || 0,
-        uptime: statsData.uptime || 0,
-        avgResponse: statsData.avgResponse || 0,
-        dailyActive: statsData.dailyActive || 0,
-        errorRate: statsData.errorRate || 0
+        dailyActive: statsData.activeUsers || 0,
       });
       setVerificationQueue(verificationsData.users || []);
       setReports(reportsData.reports || []);
@@ -150,55 +144,13 @@ const AdminDashboard: React.FC = () => {
   };
 
   const statsDisplay = [
-    { 
-      label: 'Total Users', 
-      value: stats.totalUsers, 
-      icon: UsersIcon, 
-      color: 'bg-gradient-to-br from-blue-500 to-blue-600',
-      change: '+12%',
-      changeType: 'positive'
-    },
-    { 
-      label: 'Pending Verifications', 
-      value: stats.pendingVerifications, 
-      icon: ShieldCheckIcon, 
-      color: 'bg-gradient-to-br from-amber-500 to-orange-600',
-      change: '-5%',
-      changeType: 'negative'
-    },
-    { 
-      label: 'Open Reports', 
-      value: stats.pendingReports, 
-      icon: FlagIcon, 
-      color: 'bg-gradient-to-br from-red-500 to-red-600',
-      change: '+3%',
-      changeType: 'positive'
-    },
-    { 
-      label: 'Active Emergencies', 
-      value: stats.activeEmergencies, 
-      icon: AlertTriangleIcon, 
-      color: 'bg-gradient-to-br from-purple-500 to-purple-600',
-      change: '0%',
-      changeType: 'neutral'
-    }
+    { label: 'Total Users',            value: stats.totalUsers,            icon: UsersIcon,         color: 'bg-gradient-to-br from-blue-500 to-blue-600' },
+    { label: 'Pending Verifications',  value: stats.pendingVerifications,  icon: ShieldCheckIcon,   color: 'bg-gradient-to-br from-amber-500 to-orange-600' },
+    { label: 'Open Reports',           value: stats.pendingReports,        icon: FlagIcon,          color: 'bg-gradient-to-br from-red-500 to-red-600' },
+    { label: 'Active Emergencies',     value: stats.activeEmergencies,     icon: AlertTriangleIcon, color: 'bg-gradient-to-br from-purple-500 to-purple-600' },
   ];
 
   const systemHealthMetrics = [
-    {
-      label: 'System Uptime',
-      value: stats.uptime ? `${stats.uptime}%` : '0%',
-      icon: ServerIcon,
-      color: 'text-emerald-600',
-      bgColor: 'bg-emerald-50'
-    },
-    {
-      label: 'Avg Response Time',
-      value: stats.avgResponse ? `${stats.avgResponse}ms` : '0ms',
-      icon: ZapIcon,
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-50'
-    },
     {
       label: 'Daily Active Users',
       value: stats.dailyActive || 0,
@@ -206,13 +158,6 @@ const AdminDashboard: React.FC = () => {
       color: 'text-purple-600',
       bgColor: 'bg-purple-50'
     },
-    {
-      label: 'Error Rate',
-      value: stats.errorRate ? `${stats.errorRate}%` : '0%',
-      icon: TrendingUpIcon,
-      color: 'text-amber-600',
-      bgColor: 'bg-amber-50'
-    }
   ];
 
   if (loading && !verificationQueue.length) {
@@ -264,16 +209,9 @@ const AdminDashboard: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           {statsDisplay.map((stat, index) => (
             <div key={index} className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-              <div className="flex items-center justify-between mb-4">
+              <div className="mb-4">
                 <div className={`w-12 h-12 ${stat.color} rounded-xl flex items-center justify-center shadow-lg`}>
                   <stat.icon size={24} className="text-white" />
-                </div>
-                <div className={`text-sm font-medium px-2 py-1 rounded-full ${
-                  stat.changeType === 'positive' ? 'text-emerald-700 bg-emerald-100' :
-                  stat.changeType === 'negative' ? 'text-red-700 bg-red-100' :
-                  'text-gray-700 bg-gray-100'
-                }`}>
-                  {stat.change}
                 </div>
               </div>
               <div>
@@ -758,6 +696,7 @@ const AdminDashboard: React.FC = () => {
                         <option value="Bamenda">📍 Bamenda</option>
                         <option value="Kribi">📍 Kribi</option>
                         <option value="Bafoussam">📍 Bafoussam</option>
+                        <option value="Bertoua">📍Bertoua</option>
                       </select>
                     </div>
                   </div>

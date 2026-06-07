@@ -1,12 +1,68 @@
 const Certificate = require('../models/Certificate');
+const Volunteer = require('../models/Volunteer');
+const Organization = require('../models/Organization');
 const User = require('../models/User');
 const Opportunity = require('../models/Opportunity');
 const asyncHandler = require('../middleware/async');
 const ErrorResponse = require('../utils/errorResponse');
 const PDFDocument = require('pdfkit');
 const QRCode = require('qrcode');
-const fs = require('fs');
-const path = require('path');
+const jwt = require('jsonwebtoken');
+const https = require('https');
+const http = require('http');
+
+// Decode a JWT token without blocking the request (used for optional auth)
+const decodeToken = (req) => {
+  try {
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token) return null;
+    return jwt.verify(token, process.env.JWT_SECRET);
+  } catch {
+    return null;
+  }
+};
+
+// Fetch a photo (base64 data-URL or http/https URL) into a Buffer
+const fetchPhotoBuffer = async (avatar) => {
+  if (!avatar) return null;
+  try {
+    if (avatar.startsWith('data:')) {
+      const base64Data = avatar.replace(/^data:image\/\w+;base64,/, '');
+      return Buffer.from(base64Data, 'base64');
+    }
+    if (avatar.startsWith('http')) {
+      return await new Promise((resolve, reject) => {
+        const protocol = avatar.startsWith('https') ? https : http;
+        protocol.get(avatar, (res) => {
+          const chunks = [];
+          res.on('data', c => chunks.push(c));
+          res.on('end', () => resolve(Buffer.concat(chunks)));
+          res.on('error', reject);
+        }).on('error', reject);
+      });
+    }
+  } catch {
+    return null;
+  }
+  return null;
+};
+
+// Helper: find a user by ID — checks User, Volunteer, then Organization collections
+const findUserById = async (id) => {
+  // Primary: legacy User model (used by authController)
+  let user = await User.findById(id).select('name email profile organizationName role');
+  if (user) {
+    const displayName = user.organizationName || user.name;
+    return { ...user.toObject(), displayName, email: user.email };
+  }
+  // Fallback: dedicated Volunteer collection
+  user = await Volunteer.findById(id).select('name email profile');
+  if (user) return { ...user.toObject(), displayName: user.name };
+  // Fallback: dedicated Organization collection
+  user = await Organization.findById(id).select('account organization');
+  if (user) return { ...user.toObject(), displayName: user.account?.name || user.organization?.name, email: user.account?.email };
+  return null;
+};
 
 // @desc    Generate certificate for volunteer
 // @route   POST /api/certificates/generate
@@ -25,8 +81,8 @@ exports.generateCertificate = asyncHandler(async (req, res, next) => {
     metadata
   } = req.body;
 
-  // Verify recipient exists
-  const recipient = await User.findById(recipientId);
+  // Verify recipient exists (check Volunteer collection first, then Organization)
+  const recipient = await findUserById(recipientId);
   if (!recipient) {
     return next(new ErrorResponse('Recipient not found', 404));
   }
@@ -40,17 +96,20 @@ exports.generateCertificate = asyncHandler(async (req, res, next) => {
     }
   }
 
+  // Get issuer display name
+  const issuerName = req.user.name || req.user.account?.name || 'UNITEE Platform';
+
   // Create certificate
   const certificateData = {
     type,
     title,
     description,
     recipientId,
-    recipientName: recipient.full_name,
+    recipientName: recipient.displayName || recipient.name,
     recipientEmail: recipient.email,
-    issuerId: req.user.id,
-    issuerName: req.user.full_name,
-    issuerType: req.user.role === 'admin' ? 'admin' : 'ngo',
+    issuerId: req.user._id,
+    issuerName,
+    issuerType: req.userType === 'admin' ? 'admin' : 'ngo',
     hoursCompleted: hoursCompleted || 0,
     skillsAcquired: skillsAcquired || [],
     achievementLevel: achievementLevel || 'bronze',
@@ -78,12 +137,25 @@ exports.verifyCertificate = asyncHandler(async (req, res, next) => {
   const { certificateId } = req.params;
 
   const certificate = await Certificate.findByCertificateId(certificateId)
-    .populate('recipientId', 'full_name email avatar_url')
-    .populate('issuerId', 'full_name organization_name')
+    .populate('recipientId', 'name email profile organizationName')
+    .populate('issuerId', 'name organizationName')
     .populate('opportunityId', 'title category location');
 
   if (!certificate) {
     return next(new ErrorResponse('Certificate not found', 404));
+  }
+
+  // Volunteer passports require org or admin access to verify
+  if (certificate.type === 'volunteer_passport') {
+    const decoded = decodeToken(req);
+    const isOrgOrAdmin = decoded && ['organization', 'admin'].includes(decoded.userType);
+    const isOwner = decoded && decoded.id === certificate.recipientId?._id?.toString();
+    if (!isOrgOrAdmin && !isOwner) {
+      return next(new ErrorResponse(
+        'Passport verification requires organization or admin access. Please log in.',
+        401
+      ));
+    }
   }
 
   // Update verification tracking
@@ -106,12 +178,12 @@ exports.verifyCertificate = asyncHandler(async (req, res, next) => {
         recipient: {
           name: certificate.recipientName,
           email: certificate.recipientEmail,
-          avatar: certificate.recipientId?.avatar_url
+          avatar: certificate.recipientId?.profile?.avatar
         },
         issuer: {
           name: certificate.issuerName,
           type: certificate.issuerType,
-          organization: certificate.issuerId?.organization_name
+          organization: certificate.issuerId?.organizationName
         },
         opportunity: certificate.opportunityId ? {
           title: certificate.opportunityTitle,
@@ -146,12 +218,13 @@ exports.getUserCertificates = asyncHandler(async (req, res, next) => {
   const { userId } = req.params;
 
   // Check if user is requesting their own certificates or is admin
-  if (req.user.id !== userId && req.user.role !== 'admin') {
+  const requestId = (req.user._id ?? req.user.id)?.toString();
+  if (requestId !== userId && req.userType !== 'admin') {
     return next(new ErrorResponse('Not authorized to access these certificates', 403));
   }
 
   const certificates = await Certificate.find({ recipientId: userId })
-    .populate('issuerId', 'full_name organization_name')
+    .populate('issuerId', 'name organizationName')
     .populate('opportunityId', 'title category')
     .sort({ issuedDate: -1 });
 
@@ -169,8 +242,8 @@ exports.downloadCertificate = asyncHandler(async (req, res, next) => {
   const { certificateId } = req.params;
 
   const certificate = await Certificate.findByCertificateId(certificateId)
-    .populate('recipientId', 'full_name email')
-    .populate('issuerId', 'full_name organization_name')
+    .populate('recipientId', 'name email profile')
+    .populate('issuerId', 'name organizationName')
     .populate('opportunityId', 'title category location');
 
   if (!certificate) {
@@ -178,7 +251,9 @@ exports.downloadCertificate = asyncHandler(async (req, res, next) => {
   }
 
   // Check if user is authorized to download
-  if (req.user.id !== certificate.recipientId._id.toString() && req.user.role !== 'admin') {
+  const recipientIdStr = certificate.recipientId?._id?.toString() ?? certificate.recipientId?.toString();
+  const requesterId = (req.user._id ?? req.user.id)?.toString();
+  if (requesterId !== recipientIdStr && req.userType !== 'admin') {
     return next(new ErrorResponse('Not authorized to download this certificate', 403));
   }
 
@@ -208,7 +283,7 @@ exports.revokeCertificate = asyncHandler(async (req, res, next) => {
   }
 
   // Check authorization
-  if (req.user.role !== 'admin' && req.user.id !== certificate.issuerId.toString()) {
+  if (req.userType !== 'admin' && req.user._id.toString() !== certificate.issuerId.toString()) {
     return next(new ErrorResponse('Not authorized to revoke this certificate', 403));
   }
 
@@ -220,11 +295,126 @@ exports.revokeCertificate = asyncHandler(async (req, res, next) => {
   });
 });
 
+// @desc    Get live volunteer passport data (computed from current user stats, never stale)
+// @route   GET /api/certificates/my-passport
+// @access  Private
+exports.getMyPassport = asyncHandler(async (req, res, next) => {
+  const user = await User.findById(req.user._id).select('name email profile stats');
+  if (!user) return next(new ErrorResponse('User not found', 404));
+
+  const hours    = user.stats?.totalHours  ?? 0;
+  const events   = user.stats?.totalEvents ?? 0;
+  const badges   = user.stats?.badges      ?? [];
+  const skills   = user.profile?.skills    ?? [];
+
+  let achievementLevel = 'bronze';
+  if (hours >= 100)     achievementLevel = 'platinum';
+  else if (hours >= 50) achievementLevel = 'gold';
+  else if (hours >= 20) achievementLevel = 'silver';
+
+  res.json({
+    success: true,
+    data: {
+      recipientName: user.name,
+      recipientEmail: user.email,
+      issuerName: 'UNITEE Platform',
+      title: 'Volunteer Passport',
+      issuedDate: new Date(),
+      metrics: {
+        hoursCompleted: hours,
+        totalEvents: events,
+        skillsAcquired: skills,
+        achievementLevel,
+        badgesEarned: badges.length,
+      },
+      earnedBadges: badges,
+      isLive: true,
+    }
+  });
+});
+
+// @desc    Download volunteer passport as PDF (versioned, stored in DB, optional photo)
+// @route   GET /api/certificates/my-passport/download?includePhoto=true
+// @access  Private
+exports.downloadMyPassport = asyncHandler(async (req, res, next) => {
+  const user = await User.findById(req.user._id).select('name email profile stats');
+  if (!user) return next(new ErrorResponse('User not found', 404));
+
+  const includePhoto = req.query.includePhoto === 'true';
+  const hours  = user.stats?.totalHours  ?? 0;
+  const events = user.stats?.totalEvents ?? 0;
+  const badges = user.stats?.badges      ?? [];
+  const skills = user.profile?.skills    ?? [];
+
+  let achievementLevel = 'bronze';
+  if (hours >= 100)     achievementLevel = 'platinum';
+  else if (hours >= 50) achievementLevel = 'gold';
+  else if (hours >= 20) achievementLevel = 'silver';
+
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:8081';
+
+  // Save a versioned Certificate record to the DB — creates a new snapshot each download
+  const certRecord = await Certificate.generateCertificate({
+    type: 'volunteer_passport',
+    title: 'Volunteer Passport',
+    description: `Volunteer Passport for ${user.name} — UNITEE Platform snapshot`,
+    recipientId: user._id,
+    recipientName: user.name,
+    recipientEmail: user.email,
+    issuerId: user._id,      // self-generated through UNITEE system
+    issuerName: 'UNITEE Platform',
+    issuerType: 'system',
+    hoursCompleted: hours,
+    skillsAcquired: skills,
+    achievementLevel,
+    metadata: {
+      totalEvents: events,
+      badgesEarned: badges.length,
+      snapshotDate: new Date(),
+    },
+  });
+
+  // Update verificationUrl now that we have the certificateId
+  certRecord.verificationUrl = `${frontendUrl}/verify/${certRecord.certificateId}`;
+  certRecord.pdfGenerated = true;
+  certRecord.downloadCount += 1;
+  await certRecord.save();
+
+  // Optionally fetch photo buffer
+  let photoBuffer = null;
+  if (includePhoto && user.profile?.avatar) {
+    photoBuffer = await fetchPhotoBuffer(user.profile.avatar);
+  }
+
+  const pseudoCert = {
+    recipientName: user.name,
+    title: 'Volunteer Passport',
+    opportunityTitle: null,
+    hoursCompleted: hours,
+    skillsAcquired: skills,
+    achievementLevel,
+    issuerName: 'UNITEE Platform',
+    issuedDate: certRecord.issuedDate,
+    certificateId: certRecord.certificateId,
+    verificationUrl: certRecord.verificationUrl,
+    totalEvents: events,
+    badgesEarned: badges.length,
+    photoBuffer,
+  };
+
+  const pdfBuffer = await generateCertificatePDF(pseudoCert);
+
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition',
+    `attachment; filename="UNITEE-Passport-${user.name.replace(/\s+/g, '-')}.pdf"`);
+  res.send(pdfBuffer);
+});
+
 // @desc    Get certificate statistics
 // @route   GET /api/certificates/stats
 // @access  Private (Admin)
 exports.getCertificateStats = asyncHandler(async (req, res, next) => {
-  if (req.user.role !== 'admin') {
+  if (req.userType !== 'admin') {
     return next(new ErrorResponse('Not authorized to access certificate statistics', 403));
   }
 
@@ -318,7 +508,6 @@ async function generateCertificatePDF(certificate) {
       doc.roundedRect(50, 50, pageWidth - 100, pageHeight - 100, 8).stroke();
 
       // ===== HEADER SECTION =====
-      // Logo placeholder (you can add actual logo here)
       doc.save();
       doc.fillColor('#3b82f6');
       doc.fontSize(40).font('Helvetica-Bold');
@@ -328,6 +517,23 @@ async function generateCertificatePDF(certificate) {
       // Subtitle
       doc.fontSize(12).fillColor('#64748b').font('Helvetica');
       doc.text('Volunteer Community Action Platform', 0, 125, { align: 'center' });
+
+      // ===== OPTIONAL PHOTO (passport only) =====
+      if (certificate.photoBuffer) {
+        try {
+          const photoSize = 80;
+          const photoX = pageWidth - 140;
+          const photoY = 65;
+          // White rounded background
+          doc.save();
+          doc.roundedRect(photoX - 4, photoY - 4, photoSize + 8, photoSize + 8, 8)
+             .fillAndStroke('#ffffff', '#e2e8f0');
+          doc.restore();
+          doc.image(certificate.photoBuffer, photoX, photoY, {
+            width: photoSize, height: photoSize, cover: [photoSize, photoSize],
+          });
+        } catch { /* photo failed silently */ }
+      }
 
       // Decorative line under header
       doc.moveTo(centerX - 150, 145).lineTo(centerX + 150, 145);
@@ -507,5 +713,7 @@ module.exports = {
   getUserCertificates: exports.getUserCertificates,
   downloadCertificate: exports.downloadCertificate,
   revokeCertificate: exports.revokeCertificate,
-  getCertificateStats: exports.getCertificateStats
+  getCertificateStats: exports.getCertificateStats,
+  getMyPassport: exports.getMyPassport,
+  downloadMyPassport: exports.downloadMyPassport,
 };

@@ -2,6 +2,7 @@ const jwt = require('jsonwebtoken');
 const Volunteer = require('../models/Volunteer');
 const Organization = require('../models/Organization');
 const Admin = require('../models/Admin');
+const User = require('../models/User');
 
 /**
  * protect — verifies JWT and attaches req.user + req.userType
@@ -34,7 +35,7 @@ exports.protect = async (req, res, next) => {
       if (user) { req.user = user; req.userType = 'volunteer'; return next(); }
     }
 
-    // Fallback: old token without userType — search all collections
+    // Fallback: token has no userType — search all collections including legacy User
     if (!user) user = await Admin.findById(id).select('-password');
     if (user) { req.user = user; req.userType = 'admin'; return next(); }
 
@@ -43,6 +44,16 @@ exports.protect = async (req, res, next) => {
 
     user = await Volunteer.findById(id).select('-password');
     if (user) { req.user = user; req.userType = 'volunteer'; return next(); }
+
+    // Legacy User collection (used by authController.js)
+    user = await User.findById(id).select('-password');
+    if (user) {
+      req.user = user;
+      req.userType = user.role === 'admin' ? 'admin'
+        : user.role === 'organizer' ? 'organization'
+        : 'volunteer';
+      return next();
+    }
 
     return res.status(401).json({ message: 'User not found' });
   } catch {

@@ -11,24 +11,26 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
-import { 
+import {
   Users, Calendar, AlertTriangle, Shield, TrendingUp, Loader2, CheckCircle, XCircle, Ban,
   RefreshCw, Trash2, Search, FileText, Award, Bell, MapPin, Eye, Settings as SettingsIcon,
-  Plus, Edit, X
+  Plus, Edit, X, ShieldCheck
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { adminAPI, opportunityAPI, communityAPI, badgeAPI } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 
 const AdminDashboard: React.FC = () => {
   const { toast } = useToast();
-  
+  const navigate = useNavigate();
+
   // State
+  const [verifyInput, setVerifyInput] = useState('');
   const [stats, setStats] = useState<any>(null);
   const [users, setUsers] = useState<any[]>([]);
   const [opportunities, setOpportunities] = useState<any[]>([]);
   const [communities, setCommunities] = useState<any[]>([]);
   const [reports, setReports] = useState<any[]>([]);
-  const [applications, setApplications] = useState<any[]>([]);
   const [certificates, setCertificates] = useState<any[]>([]);
   const [badges, setBadges] = useState<any[]>([]);
   const [systemHealth, setSystemHealth] = useState<any>(null);
@@ -52,8 +54,6 @@ const AdminDashboard: React.FC = () => {
   // Modals
   const [showAlertModal, setShowAlertModal] = useState(false);
   const [showUserModal, setShowUserModal] = useState(false);
-  const [showEditOppModal, setShowEditOppModal] = useState(false);
-  const [showEditCommModal, setShowEditCommModal] = useState(false);
   const [showNotificationModal, setShowNotificationModal] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showBadgeModal, setShowBadgeModal] = useState(false);
@@ -93,10 +93,9 @@ const AdminDashboard: React.FC = () => {
       
       setStats(statsData);
       setUsers(Array.isArray(usersData) ? usersData : usersData.users || usersData.data || []);
-      setOpportunities(Array.isArray(oppsData) ? oppsData : oppsData.data || []);
-      setCommunities(Array.isArray(commsData) ? commsData : commsData.data || []);
+      setOpportunities(Array.isArray(oppsData) ? oppsData : oppsData.opportunities || oppsData.data || []);
+      setCommunities(Array.isArray(commsData) ? commsData : commsData.communities || commsData.data || []);
       setReports(Array.isArray(reportsData) ? reportsData : reportsData.reports || reportsData.data || []);
-      setApplications([]);
       setCertificates([]);
     } catch (err: any) {
       console.error('Dashboard error:', err);
@@ -119,7 +118,8 @@ const AdminDashboard: React.FC = () => {
   const handleUserAction = async (userId: string, action: string) => {
     try {
       if (action === 'delete') {
-        if (!confirm('Delete this user?')) return;
+        if (!confirm('Permanently delete this user? This cannot be undone.')) return;
+        await adminAPI.deleteUser(userId);
         setUsers(users.filter(u => u._id !== userId));
       } else if (action === 'suspend' || action === 'activate') {
         await adminAPI.updateUserStatus(userId, { isActive: action === 'activate' });
@@ -145,10 +145,11 @@ const AdminDashboard: React.FC = () => {
   // Bulk Delete
   const handleBulkDelete = async (type: 'users' | 'opportunities') => {
     const items = type === 'users' ? selectedUsers : selectedOpportunities;
-    if (items.length === 0 || !confirm(`Delete ${items.length} ${type}?`)) return;
-    
+    if (items.length === 0 || !confirm(`Permanently delete ${items.length} ${type}? This cannot be undone.`)) return;
+
     try {
       if (type === 'users') {
+        await Promise.all(selectedUsers.map(id => adminAPI.deleteUser(id)));
         setUsers(users.filter(u => !selectedUsers.includes(u._id)));
         setSelectedUsers([]);
       } else {
@@ -163,34 +164,24 @@ const AdminDashboard: React.FC = () => {
   };
 
   // Opportunity Actions
-  const handleOpportunityAction = async (oppId: string, action: string) => {
+  const handleOpportunityAction = async (oppId: string) => {
     try {
-      if (action === 'delete') {
-        if (!confirm('Delete this opportunity?')) return;
-        await opportunityAPI.delete(oppId);
-        setOpportunities(opportunities.filter(o => o._id !== oppId));
-        toast({ title: "Success", description: "Opportunity deleted" });
-      } else if (action === 'edit') {
-        setSelectedItem(opportunities.find(o => o._id === oppId));
-        setShowEditOppModal(true);
-      }
+      if (!confirm('Delete this opportunity?')) return;
+      await opportunityAPI.delete(oppId);
+      setOpportunities(opportunities.filter(o => o._id !== oppId));
+      toast({ title: "Success", description: "Opportunity deleted" });
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
     }
   };
 
   // Community Actions
-  const handleCommunityAction = async (commId: string, action: string) => {
+  const handleCommunityAction = async (commId: string) => {
     try {
-      if (action === 'delete') {
-        if (!confirm('Delete this community?')) return;
-        await communityAPI.delete(commId);
-        setCommunities(communities.filter(c => c._id !== commId));
-        toast({ title: "Success", description: "Community deleted" });
-      } else if (action === 'edit') {
-        setSelectedItem(communities.find(c => c._id === commId));
-        setShowEditCommModal(true);
-      }
+      if (!confirm('Delete this community?')) return;
+      await communityAPI.delete(commId);
+      setCommunities(communities.filter(c => c._id !== commId));
+      toast({ title: "Success", description: "Community deleted" });
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
     }
@@ -202,16 +193,6 @@ const AdminDashboard: React.FC = () => {
       await adminAPI.updateReport(reportId, { status, resolution: `${status} by admin` });
       setReports(reports.filter(r => r._id !== reportId));
       toast({ title: "Success", description: `Report ${status}` });
-    } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
-    }
-  };
-
-  // Application Actions
-  const handleApplicationAction = async (appId: string, status: string) => {
-    try {
-      setApplications(applications.map(a => a._id === appId ? { ...a, status } : a));
-      toast({ title: "Success", description: `Application ${status}` });
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
     }
@@ -392,21 +373,21 @@ const AdminDashboard: React.FC = () => {
     
     setLoadingSystemHealth(true);
     try {
-      // TODO: Replace with real backend endpoint when available
-      // For now, calculate from actual data
+      const data = await adminAPI.getSystemHealth();
+      const uptimeMs = data.uptimeSeconds * 1000;
       const health = {
         timestamp: Date.now(),
-        uptime: Date.now() - new Date(stats?.serverStartTime || Date.now()).getTime(),
-        responseTime: 0, // Will be calculated by backend
-        activeUsers24h: users.filter(u => u.lastActive && Date.now() - new Date(u.lastActive).getTime() < 86400000).length,
-        databaseSize: 'N/A', // Backend will provide
-        memoryUsage: 0, // Backend will provide
-        cpuUsage: 0, // Backend will provide
-        errorRate: '0.00', // Backend will provide
-        requestsPerMinute: 0, // Backend will provide
-        peakUsers: users.length,
-        avgSessionDuration: 'N/A', // Backend will provide
-        topPages: [] // Backend will provide
+        uptime: uptimeMs,
+        serverStartTime: data.serverStartTime,
+        memoryUsage: data.memory?.heapPercent || 0,
+        heapUsedMB: data.memory?.heapUsedMB || 0,
+        heapTotalMB: data.memory?.heapTotalMB || 0,
+        rssMB: data.memory?.rssMB || 0,
+        activeUsers24h: data.activeUsers24h || 0,
+        databaseSize: data.database ? `${data.database.dataSizeMB} MB` : 'N/A',
+        databaseObjects: data.database?.objects || 0,
+        nodeVersion: data.nodeVersion || process.versions?.node || 'N/A',
+        environment: data.environment || 'N/A',
       };
       setSystemHealth(health);
     } catch (err) {
@@ -522,12 +503,11 @@ const AdminDashboard: React.FC = () => {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={(tab) => { setActiveTab(tab); if (tab === 'system') fetchSystemHealth(); if (tab === 'badges') fetchBadges(); }} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-11">
+        <TabsList className="grid w-full grid-cols-10">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="users">Users</TabsTrigger>
           <TabsTrigger value="opportunities">Opportunities</TabsTrigger>
           <TabsTrigger value="communities">Communities</TabsTrigger>
-          <TabsTrigger value="applications">Applications</TabsTrigger>
           <TabsTrigger value="certificates">Certificates</TabsTrigger>
           <TabsTrigger value="cert-templates">Templates</TabsTrigger>
           <TabsTrigger value="badges">Badges</TabsTrigger>
@@ -542,6 +522,31 @@ const AdminDashboard: React.FC = () => {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card><CardHeader><CardTitle>Recent Users</CardTitle></CardHeader><CardContent><div className="space-y-2">{users.slice(0, 5).map(u => (<div key={u._id} className="flex justify-between p-3 border rounded"><div><p className="font-medium text-sm">{u.name}</p><p className="text-xs text-gray-500">{u.email}</p></div><Badge>{u.role}</Badge></div>))}</div></CardContent></Card>
             <Card><CardHeader><CardTitle>Pending Reports</CardTitle></CardHeader><CardContent><div className="space-y-2">{reports.slice(0, 5).map(r => (<div key={r._id} className="p-3 border rounded"><Badge variant="destructive" className="text-xs">{r.type}</Badge><p className="text-sm font-medium mt-1">{r.reason}</p></div>))}{reports.length === 0 && <p className="text-center text-gray-500 py-4">No pending reports</p>}</div></CardContent></Card>
+            <Card className="lg:col-span-2">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <ShieldCheck className="h-5 w-5 text-blue-500" />
+                  Verify a Certificate
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex gap-2 max-w-lg">
+                  <Input
+                    placeholder="Enter certificate ID…"
+                    value={verifyInput}
+                    onChange={e => setVerifyInput(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && verifyInput.trim() && navigate(`/verify/${verifyInput.trim()}`)}
+                  />
+                  <Button
+                    onClick={() => verifyInput.trim() && navigate(`/verify/${verifyInput.trim()}`)}
+                    disabled={!verifyInput.trim()}
+                  >
+                    Verify
+                  </Button>
+                </div>
+                <p className="text-xs text-gray-400 mt-2">Verify both organisation certificates and volunteer passports. Admins can verify all types.</p>
+              </CardContent>
+            </Card>
           </div>
         </TabsContent>
 
@@ -557,7 +562,7 @@ const AdminDashboard: React.FC = () => {
         <TabsContent value="opportunities">
           <Card>
             <CardHeader><div className="flex justify-between"><CardTitle>Opportunity Management</CardTitle><div className="flex gap-2">{selectedOpportunities.length > 0 && <Button size="sm" variant="destructive" onClick={() => handleBulkDelete('opportunities')}><Trash2 className="h-4 w-4 mr-1" />Delete ({selectedOpportunities.length})</Button>}<p className="text-sm text-gray-600">{filteredOpportunities.length} opportunities</p></div></div></CardHeader>
-            <CardContent><div className="space-y-2">{filteredOpportunities.map(o => (<div key={o._id} className="flex items-start gap-3 p-4 border rounded hover:bg-gray-50"><Checkbox checked={selectedOpportunities.includes(o._id)} onCheckedChange={(c) => c ? setSelectedOpportunities([...selectedOpportunities, o._id]) : setSelectedOpportunities(selectedOpportunities.filter(id => id !== o._id))} className="mt-1" /><div className="flex-1"><h3 className="font-semibold mb-1">{o.title}</h3><div className="flex items-center gap-2 mb-2"><Badge variant="outline">{o.category}</Badge><span className="text-sm text-gray-600">📍 {o.location}</span></div><p className="text-sm text-gray-600 mb-1">{o.description?.substring(0, 100)}...</p><p className="text-xs text-gray-500">By {o.organizer?.name} • {new Date(o.date).toLocaleDateString()}</p></div><div className="flex gap-2"><Button size="sm" variant="outline" onClick={() => handleOpportunityAction(o._id, 'edit')}><Edit className="h-4 w-4" /></Button><Button size="sm" variant="destructive" onClick={() => handleOpportunityAction(o._id, 'delete')}><Trash2 className="h-4 w-4" /></Button></div></div>))}</div></CardContent>
+            <CardContent><div className="space-y-2">{filteredOpportunities.map(o => (<div key={o._id} className="flex items-start gap-3 p-4 border rounded hover:bg-gray-50"><Checkbox checked={selectedOpportunities.includes(o._id)} onCheckedChange={(c) => c ? setSelectedOpportunities([...selectedOpportunities, o._id]) : setSelectedOpportunities(selectedOpportunities.filter(id => id !== o._id))} className="mt-1" /><div className="flex-1"><h3 className="font-semibold mb-1">{o.title}</h3><div className="flex items-center gap-2 mb-2"><Badge variant="outline">{o.category}</Badge><span className="text-sm text-gray-600">📍 {o.location}</span></div><p className="text-sm text-gray-600 mb-1">{o.description?.substring(0, 100)}...</p><p className="text-xs text-gray-500">By {o.organizer?.name} • {new Date(o.date).toLocaleDateString()}</p></div><div className="flex gap-2"><Button size="sm" variant="destructive" onClick={() => handleOpportunityAction(o._id)}><Trash2 className="h-4 w-4" /></Button></div></div>))}</div></CardContent>
           </Card>
         </TabsContent>
 
@@ -565,22 +570,14 @@ const AdminDashboard: React.FC = () => {
         <TabsContent value="communities">
           <Card>
             <CardHeader><div className="flex justify-between"><CardTitle>Community Management</CardTitle><p className="text-sm text-gray-600">{filteredCommunities.length} communities</p></div></CardHeader>
-            <CardContent><div className="space-y-2">{filteredCommunities.map(c => (<div key={c._id} className="flex items-start justify-between p-4 border rounded hover:bg-gray-50"><div className="flex-1"><h3 className="font-semibold mb-1">{c.name}</h3><div className="flex items-center gap-2 mb-2"><Badge variant="outline">{c.category}</Badge><span className="text-sm text-gray-600">📍 {c.location}</span><span className="text-sm text-gray-600">👥 {c.members?.length || 0} members</span></div><p className="text-sm text-gray-600">{c.description?.substring(0, 100)}...</p></div><div className="flex gap-2"><Button size="sm" variant="outline" onClick={() => handleCommunityAction(c._id, 'edit')}><Edit className="h-4 w-4" /></Button><Button size="sm" variant="destructive" onClick={() => handleCommunityAction(c._id, 'delete')}><Trash2 className="h-4 w-4" /></Button></div></div>))}</div></CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Applications Tab */}
-        <TabsContent value="applications">
-          <Card>
-            <CardHeader><CardTitle>Application Management</CardTitle></CardHeader>
-            <CardContent>{applications.length === 0 ? (<div className="text-center py-12"><FileText className="h-16 w-16 mx-auto text-gray-300 mb-4" /><p className="text-gray-600">No pending applications</p></div>) : (<div className="space-y-3">{applications.map(app => (<div key={app._id} className="p-4 border rounded"><div className="flex justify-between items-start mb-2"><div><h3 className="font-semibold">{app.volunteer?.name}</h3><p className="text-sm text-gray-600">{app.opportunity?.title}</p></div><Badge>{app.status}</Badge></div><div className="flex gap-2 mt-3"><Button size="sm" onClick={() => handleApplicationAction(app._id, 'approved')}><CheckCircle className="h-4 w-4 mr-1" />Approve</Button><Button size="sm" variant="outline" onClick={() => handleApplicationAction(app._id, 'rejected')}><XCircle className="h-4 w-4 mr-1" />Reject</Button></div></div>))}</div>)}</CardContent>
+            <CardContent><div className="space-y-2">{filteredCommunities.map(c => (<div key={c._id} className="flex items-start justify-between p-4 border rounded hover:bg-gray-50"><div className="flex-1"><h3 className="font-semibold mb-1">{c.name}</h3><div className="flex items-center gap-2 mb-2"><Badge variant="outline">{c.category}</Badge><span className="text-sm text-gray-600">📍 {c.location}</span><span className="text-sm text-gray-600">👥 {c.members?.length || 0} members</span></div><p className="text-sm text-gray-600">{c.description?.substring(0, 100)}...</p></div><div className="flex gap-2"><Button size="sm" variant="destructive" onClick={() => handleCommunityAction(c._id)}><Trash2 className="h-4 w-4" /></Button></div></div>))}</div></CardContent>
           </Card>
         </TabsContent>
 
         {/* Certificates Tab */}
         <TabsContent value="certificates">
           <Card>
-            <CardHeader><div className="flex justify-between"><CardTitle>Certificate Management</CardTitle><Button size="sm" onClick={() => setShowNotificationModal(true)}><Plus className="h-4 w-4 mr-1" />Issue Certificate</Button></div></CardHeader>
+            <CardHeader><CardTitle>Certificate Management</CardTitle></CardHeader>
             <CardContent>{certificates.length === 0 ? (<div className="text-center py-12"><Award className="h-16 w-16 mx-auto text-gray-300 mb-4" /><p className="text-gray-600">No certificates issued</p></div>) : (<div className="space-y-2">{certificates.map(cert => (<div key={cert._id} className="flex justify-between p-4 border rounded"><div><h3 className="font-semibold">{cert.volunteer?.name}</h3><p className="text-sm text-gray-600">{cert.opportunity?.title}</p><p className="text-xs text-gray-500">{cert.hours} hours • Issued {new Date(cert.issuedAt).toLocaleDateString()}</p></div><Button size="sm" variant="outline">View</Button></div>))}</div>)}</CardContent>
           </Card>
 
@@ -686,25 +683,56 @@ const AdminDashboard: React.FC = () => {
               </div>
               
               {/* Key Metrics */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 <Card><CardContent className="pt-6"><div className="flex items-center justify-between"><div><p className="text-sm text-gray-600 mb-1">Server Uptime</p><p className="text-2xl font-bold">{formatUptime(systemHealth.uptime)}</p><p className="text-xs text-green-600 mt-1">● Online</p></div><TrendingUp className="h-10 w-10 text-green-500 opacity-20" /></div></CardContent></Card>
-                <Card><CardContent className="pt-6"><div className="flex items-center justify-between"><div><p className="text-sm text-gray-600 mb-1">Avg Response Time</p><p className="text-2xl font-bold">{systemHealth.responseTime}ms</p><p className="text-xs text-gray-500 mt-1">Last 24 hours</p></div><TrendingUp className="h-10 w-10 text-blue-500 opacity-20" /></div></CardContent></Card>
-                <Card><CardContent className="pt-6"><div className="flex items-center justify-between"><div><p className="text-sm text-gray-600 mb-1">Active Users (24h)</p><p className="text-2xl font-bold">{systemHealth.activeUsers24h}</p><p className="text-xs text-gray-500 mt-1">Peak: {systemHealth.peakUsers}</p></div><Users className="h-10 w-10 text-purple-500 opacity-20" /></div></CardContent></Card>
-                <Card><CardContent className="pt-6"><div className="flex items-center justify-between"><div><p className="text-sm text-gray-600 mb-1">Error Rate</p><p className="text-2xl font-bold">{systemHealth.errorRate}%</p><p className="text-xs text-green-600 mt-1">Within normal range</p></div><AlertTriangle className="h-10 w-10 text-yellow-500 opacity-20" /></div></CardContent></Card>
+                <Card><CardContent className="pt-6"><div className="flex items-center justify-between"><div><p className="text-sm text-gray-600 mb-1">Active Users (24h)</p><p className="text-2xl font-bold">{systemHealth.activeUsers24h}</p><p className="text-xs text-gray-500 mt-1">Unique sessions</p></div><Users className="h-10 w-10 text-purple-500 opacity-20" /></div></CardContent></Card>
+                <Card><CardContent className="pt-6"><div className="flex items-center justify-between"><div><p className="text-sm text-gray-600 mb-1">Heap Memory</p><p className="text-2xl font-bold">{systemHealth.memoryUsage}%</p><p className="text-xs text-gray-500 mt-1">{systemHealth.heapUsedMB} / {systemHealth.heapTotalMB} MB</p></div><AlertTriangle className="h-10 w-10 text-blue-500 opacity-20" /></div></CardContent></Card>
               </div>
 
               {/* Resource Usage */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Card><CardHeader><CardTitle>Resource Usage</CardTitle></CardHeader><CardContent><div className="space-y-4"><div><div className="flex justify-between mb-2"><span className="text-sm font-medium">Memory Usage</span><span className="text-sm text-gray-600">{systemHealth.memoryUsage}%</span></div><div className="w-full bg-gray-200 rounded-full h-2"><div className="bg-blue-500 h-2 rounded-full" style={{width: `${systemHealth.memoryUsage}%`}}></div></div></div><div><div className="flex justify-between mb-2"><span className="text-sm font-medium">CPU Usage</span><span className="text-sm text-gray-600">{systemHealth.cpuUsage}%</span></div><div className="w-full bg-gray-200 rounded-full h-2"><div className="bg-green-500 h-2 rounded-full" style={{width: `${systemHealth.cpuUsage}%`}}></div></div></div><div className="pt-4 border-t"><div className="flex justify-between"><span className="text-sm text-gray-600">Database Size</span><span className="font-medium">{systemHealth.databaseSize}</span></div><div className="flex justify-between mt-2"><span className="text-sm text-gray-600">Requests/min</span><span className="font-medium">{systemHealth.requestsPerMinute}</span></div></div></div></CardContent></Card>
+                <Card>
+                  <CardHeader><CardTitle>Memory Usage</CardTitle></CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      <div>
+                        <div className="flex justify-between mb-2"><span className="text-sm font-medium">Heap Used</span><span className="text-sm text-gray-600">{systemHealth.memoryUsage}%</span></div>
+                        <div className="w-full bg-gray-200 rounded-full h-2"><div className="bg-blue-500 h-2 rounded-full" style={{width: `${systemHealth.memoryUsage}%`}}></div></div>
+                      </div>
+                      <div className="pt-4 border-t space-y-2">
+                        <div className="flex justify-between"><span className="text-sm text-gray-600">Heap Used</span><span className="font-medium">{systemHealth.heapUsedMB} MB</span></div>
+                        <div className="flex justify-between"><span className="text-sm text-gray-600">Heap Total</span><span className="font-medium">{systemHealth.heapTotalMB} MB</span></div>
+                        <div className="flex justify-between"><span className="text-sm text-gray-600">RSS (process)</span><span className="font-medium">{systemHealth.rssMB} MB</span></div>
+                        <div className="flex justify-between"><span className="text-sm text-gray-600">Database Size</span><span className="font-medium">{systemHealth.databaseSize}</span></div>
+                        <div className="flex justify-between"><span className="text-sm text-gray-600">DB Objects</span><span className="font-medium">{systemHealth.databaseObjects?.toLocaleString()}</span></div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
 
-                <Card><CardHeader><CardTitle>User Activity</CardTitle></CardHeader><CardContent><div className="space-y-4"><div className="flex justify-between items-center p-3 bg-gray-50 rounded"><span className="text-sm font-medium">Total Users</span><span className="text-xl font-bold">{stats?.totalUsers || 0}</span></div><div className="flex justify-between items-center p-3 bg-gray-50 rounded"><span className="text-sm font-medium">Active (24h)</span><span className="text-xl font-bold text-green-600">{systemHealth.activeUsers24h}</span></div><div className="flex justify-between items-center p-3 bg-gray-50 rounded"><span className="text-sm font-medium">Avg Session</span><span className="text-xl font-bold">{systemHealth.avgSessionDuration}</span></div><div className="flex justify-between items-center p-3 bg-gray-50 rounded"><span className="text-sm font-medium">Peak Concurrent</span><span className="text-xl font-bold text-purple-600">{systemHealth.peakUsers}</span></div></div></CardContent></Card>
+                <Card>
+                  <CardHeader><CardTitle>User Activity</CardTitle></CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      <div className="flex justify-between items-center p-3 bg-gray-50 rounded"><span className="text-sm font-medium">Total Users</span><span className="text-xl font-bold">{stats?.totalUsers || 0}</span></div>
+                      <div className="flex justify-between items-center p-3 bg-gray-50 rounded"><span className="text-sm font-medium">Active (24h)</span><span className="text-xl font-bold text-green-600">{systemHealth.activeUsers24h}</span></div>
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
 
-              {/* Top Pages */}
-              <Card><CardHeader><CardTitle>Most Visited Pages</CardTitle></CardHeader><CardContent><div className="space-y-3">{systemHealth.topPages.map((page: any, idx: number) => (<div key={idx} className="flex items-center justify-between p-3 border rounded"><div className="flex items-center gap-3"><span className="text-lg font-bold text-gray-400">#{idx + 1}</span><span className="font-medium">{page.page}</span></div><Badge variant="outline">{page.views.toLocaleString()} views</Badge></div>))}</div></CardContent></Card>
-
               {/* System Info */}
-              <Card><CardHeader><CardTitle>System Information</CardTitle></CardHeader><CardContent><div className="grid grid-cols-2 md:grid-cols-4 gap-4"><div><p className="text-xs text-gray-600 mb-1">Node Version</p><p className="font-medium">v22.18.0</p></div><div><p className="text-xs text-gray-600 mb-1">MongoDB</p><p className="font-medium">Connected</p></div><div><p className="text-xs text-gray-600 mb-1">Environment</p><p className="font-medium">Development</p></div><div><p className="text-xs text-gray-600 mb-1">Last Restart</p><p className="font-medium">{new Date(Date.now() - systemHealth.uptime).toLocaleString()}</p></div></div></CardContent></Card>
+              <Card>
+                <CardHeader><CardTitle>System Information</CardTitle></CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div><p className="text-xs text-gray-600 mb-1">Node Version</p><p className="font-medium">{systemHealth.nodeVersion}</p></div>
+                    <div><p className="text-xs text-gray-600 mb-1">MongoDB</p><p className="font-medium">Connected</p></div>
+                    <div><p className="text-xs text-gray-600 mb-1">Environment</p><p className="font-medium">{systemHealth.environment}</p></div>
+                    <div><p className="text-xs text-gray-600 mb-1">Last Restart</p><p className="font-medium">{systemHealth.serverStartTime ? new Date(systemHealth.serverStartTime).toLocaleString() : 'N/A'}</p></div>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
           ) : (
             <Card className="p-12 text-center"><TrendingUp className="h-16 w-16 mx-auto text-gray-300 mb-4" /><h3 className="text-xl font-semibold mb-2">System Health Monitor</h3><p className="text-gray-600 mb-4">View detailed system metrics and performance data</p><Button onClick={fetchSystemHealth}>Load System Health</Button></Card>

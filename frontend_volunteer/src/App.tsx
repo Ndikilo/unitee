@@ -28,6 +28,7 @@ import Notifications from "./pages/Notifications";
 import MyOpportunities from "./pages/MyOpportunities";
 import Communities from "./pages/Communities";
 import CommunityDetail from "./pages/CommunityDetail";
+import CertificateVerify from "./pages/CertificateVerify";
 import TermsVolunteer from "./pages/TermsVolunteer";
 import TermsOrganization from "./pages/TermsOrganization";
 import PrivacyVolunteer from "./pages/PrivacyVolunteer";
@@ -79,6 +80,8 @@ const App = () => (
                   <Route path="/volunteer-dashboard" element={<Dashboard />} />
                   <Route path="/organizer-dashboard" element={<OrganizerDashboardEnhanced />} />
                   <Route path="/admin-dashboard" element={<AdminDashboard />} />
+                  <Route path="/verify" element={<CertificateVerify />} />
+                  <Route path="/verify/:id" element={<CertificateVerify />} />
                   <Route path="/auth/success" element={<AuthSuccess />} />
                   <Route path="*" element={<NotFound />} />
                 </Routes>

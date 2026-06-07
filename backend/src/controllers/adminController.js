@@ -1,6 +1,7 @@
 const Volunteer = require('../models/Volunteer');
 const Organization = require('../models/Organization');
 const AdminModel = require('../models/Admin');
+const User = require('../models/User');
 const Community = require('../models/Community');
 const Opportunity = require('../models/Opportunity');
 const Report = require('../models/Report');
@@ -21,7 +22,11 @@ exports.getDashboardStats = async (req, res) => {
       pendingVerifications,
       activeEmergencies,
       dailyActiveVolunteers,
-      totalHours
+      totalHours,
+      userVolunteers,
+      userOrganizers,
+      userActiveToday,
+      userTotalHours
     ] = await Promise.all([
       Volunteer.countDocuments({ isActive: true }),
       Organization.countDocuments({ isActive: true }),
@@ -32,23 +37,30 @@ exports.getDashboardStats = async (req, res) => {
       EmergencyAlert.countDocuments({ isActive: true }),
       Volunteer.countDocuments({ lastActive: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } }),
       Volunteer.aggregate([{ $group: { _id: null, total: { $sum: '$stats.totalHours' } } }]).then(r => r[0]?.total || 0),
+      // User collection counts (primary auth system)
+      User.countDocuments({ role: 'user', isActive: true }),
+      User.countDocuments({ role: 'organizer', isActive: true }),
+      User.countDocuments({ lastActive: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } }),
+      User.aggregate([{ $group: { _id: null, total: { $sum: '$stats.totalHours' } } }]).then(r => r[0]?.total || 0),
     ]);
 
+    // Prefer User collection counts (primary auth); fall back to Volunteer/Org collections
+    const resolvedVolunteers = userVolunteers || totalVolunteers;
+    const resolvedOrgs = userOrganizers || totalOrganizations;
+    const resolvedActive = userActiveToday || dailyActiveVolunteers;
+    const resolvedHours = userTotalHours || totalHours;
+
     res.json({
-      totalUsers: totalVolunteers + totalOrganizations,
-      totalVolunteers,
-      totalOrganizations,
+      totalUsers: resolvedVolunteers + resolvedOrgs,
+      totalVolunteers: resolvedVolunteers,
+      totalOrganizations: resolvedOrgs,
       totalCommunities,
       totalOpportunities,
-      totalApplications: 0,
-      totalHours,
-      activeUsers: dailyActiveVolunteers,
+      totalHours: resolvedHours,
+      activeUsers: resolvedActive,
       pendingReports,
       pendingVerifications,
       activeEmergencies,
-      uptime: 99.9,
-      avgResponse: 45,
-      errorRate: 0.1,
     });
   } catch (error) {
     console.error('Stats error:', error);
@@ -56,40 +68,46 @@ exports.getDashboardStats = async (req, res) => {
   }
 };
 
-// @desc    Get all users (volunteers + organizations)
+// @desc    Get all users (paginated at DB level)
 // @route   GET /api/admin/users
 // @access  Private/Admin
 exports.getUsers = async (req, res) => {
   try {
-    const { page = 1, limit = 10, search, role, status } = req.query;
+    const pageNum  = Math.max(1, parseInt(req.query.page)  || 1);
+    const limitNum = Math.min(100, parseInt(req.query.limit) || 10); // cap at 100
+    const { search, role, status } = req.query;
+    const skip = (pageNum - 1) * limitNum;
 
-    // Fetch volunteers
-    let volQuery = {};
-    if (search) volQuery.$or = [{ name: new RegExp(search, 'i') }, { email: new RegExp(search, 'i') }];
-    if (status === 'active') volQuery.isActive = true;
-    if (status === 'suspended') volQuery.isActive = false;
+    // Build query for primary User collection
+    const query = {};
+    if (search) {
+      query.$or = [
+        { name:  { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } },
+      ];
+    }
+    if (status === 'active')    query.isActive = true;
+    if (status === 'suspended') query.isActive = false;
+    if (role === 'user')       query.role = 'user';
+    else if (role === 'organizer') query.role = 'organizer';
+    else if (role === 'admin') query.role = 'admin';
 
-    // Fetch organizations
-    let orgQuery = {};
-    if (search) orgQuery.$or = [{ 'account.name': new RegExp(search, 'i') }, { 'account.email': new RegExp(search, 'i') }, { 'organization.name': new RegExp(search, 'i') }];
+    // Paginate at DB level — never load full collection into memory
+    const [users, total] = await Promise.all([
+      User.find(query).select('-password').sort({ createdAt: -1 }).skip(skip).limit(limitNum).lean(),
+      User.countDocuments(query),
+    ]);
 
-    let volunteers = [], organizations = [];
-    if (!role || role === 'user') volunteers = await Volunteer.find(volQuery).select('-password').lean();
-    if (!role || role === 'organizer') organizations = await Organization.find(orgQuery).select('-account.password').lean();
+    const normalized = users.map(u => ({ ...u, displayName: u.name, displayEmail: u.email }));
 
-    // Normalize for frontend
-    const normalized = [
-      ...volunteers.map(v => ({ ...v, role: 'user', displayName: v.name, displayEmail: v.email })),
-      ...organizations.map(o => ({ ...o, role: 'organizer', displayName: o.account?.name, displayEmail: o.account?.email, name: o.account?.name, email: o.account?.email })),
-    ];
-
-    const total = normalized.length;
-    const start = (page - 1) * limit;
-    const paginated = normalized.slice(start, start + Number(limit));
-
-    res.json({ users: paginated, total, totalPages: Math.ceil(total / limit), currentPage: Number(page) });
+    res.json({
+      users: normalized,
+      total,
+      totalPages: Math.ceil(total / limitNum),
+      currentPage: pageNum,
+    });
   } catch (error) {
-    console.error(error);
+    console.error('getUsers error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -102,26 +120,71 @@ exports.updateUserStatus = async (req, res) => {
     const { isActive, isVerified, verificationStatus } = req.body;
     const { id } = req.params;
 
-    // Try volunteer first
-    let user = await Volunteer.findById(id);
-    if (user) {
-      if (isActive !== undefined) user.isActive = isActive;
-      if (isVerified !== undefined) user.verification.isVerified = isVerified;
-      await user.save();
-      return res.json({ message: 'Updated', user });
+    // Primary: User collection (where all auth registrations live)
+    const userDoc = await User.findById(id);
+    if (userDoc) {
+      if (isActive !== undefined) userDoc.isActive = isActive;
+      if (isVerified !== undefined) userDoc.isVerified = isVerified;
+      if (verificationStatus) userDoc.organizationVerificationStatus = verificationStatus;
+      await userDoc.save();
+      return res.json({ message: 'Updated', user: userDoc.toObject() });
     }
 
-    // Try organization
-    let org = await Organization.findById(id);
+    // Fallback: legacy Volunteer collection
+    const vol = await Volunteer.findById(id);
+    if (vol) {
+      if (isActive !== undefined) vol.isActive = isActive;
+      if (isVerified !== undefined && vol.verification) vol.verification.isVerified = isVerified;
+      await vol.save();
+      return res.json({ message: 'Updated', user: vol });
+    }
+
+    // Fallback: legacy Organization collection
+    const org = await Organization.findById(id);
     if (org) {
       if (isActive !== undefined) org.isActive = isActive;
-      if (verificationStatus) org.verification.status = verificationStatus;
+      if (verificationStatus && org.verification) org.verification.status = verificationStatus;
       await org.save();
       return res.json({ message: 'Updated', user: org });
     }
 
     res.status(404).json({ message: 'User not found' });
   } catch (error) {
+    console.error('updateUserStatus error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// @desc    Delete a user (hard delete from all collections)
+// @route   DELETE /api/admin/users/:id
+// @access  Private/Admin
+exports.deleteUser = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Prevent self-deletion
+    const requesterId = (req.user._id ?? req.user.id)?.toString();
+    if (requesterId === id) {
+      return res.status(400).json({ message: 'You cannot delete your own account' });
+    }
+
+    // Delete from User collection (primary)
+    const deleted = await User.findByIdAndDelete(id);
+
+    // Also clean up from legacy collections in case they exist
+    await Promise.allSettled([
+      Volunteer.findByIdAndDelete(id),
+      Organization.findByIdAndDelete(id),
+    ]);
+
+    if (!deleted) {
+      // May have only existed in a legacy collection — still success
+      return res.json({ message: 'User deleted successfully' });
+    }
+
+    res.json({ message: 'User deleted successfully' });
+  } catch (error) {
+    console.error('deleteUser error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -264,41 +327,43 @@ exports.createEmergencyAlert = async (req, res) => {
       expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
     });
     
-    // Find target users
-    let userQuery = { 
-      isActive: true,
-      'preferences.emergencyAlerts': true
-    };
-    
-    if (targetCity) {
-      userQuery['profile.city'] = new RegExp(targetCity, 'i');
-    }
-    
-    const targetUsers = await User.find(userQuery).select('_id');
-    
-    // Create notifications for all target users
-    const notifications = targetUsers.map(user => ({
-      recipient: user._id,
-      type: 'emergency',
-      title,
-      message,
-      priority: severity,
-      data: {
-        alertId: alert._id,
-        actionRequired: true
+    // Find target users and fan-out in batches to avoid memory pressure at scale
+    const userQuery = { isActive: true, 'preferences.emergencyAlerts': true };
+    if (targetCity) userQuery['profile.city'] = new RegExp(targetCity, 'i');
+
+    const BATCH_SIZE = 500;
+    let totalSent = 0;
+    let cursor = User.find(userQuery).select('_id').lean().cursor();
+    let batch = [];
+
+    for await (const user of cursor) {
+      batch.push({
+        recipient: user._id,
+        type: 'emergency',
+        title,
+        message,
+        priority: severity,
+        data: { alertId: alert._id, actionRequired: true },
+      });
+      if (batch.length >= BATCH_SIZE) {
+        await Notification.insertMany(batch, { ordered: false });
+        totalSent += batch.length;
+        batch = [];
       }
-    }));
-    
-    await Notification.insertMany(notifications);
-    
+    }
+    if (batch.length) {
+      await Notification.insertMany(batch, { ordered: false });
+      totalSent += batch.length;
+    }
+
     // Update alert stats
-    alert.stats.totalSent = targetUsers.length;
+    alert.stats.totalSent = totalSent;
     await alert.save();
     
     res.status(201).json({
       message: 'Emergency alert sent successfully',
       alert,
-      recipientCount: targetUsers.length
+      recipientCount: totalSent,
     });
   } catch (error) {
     res.status(500).json({ message: 'Server error' });
@@ -409,6 +474,53 @@ exports.getRecentActivity = async (req, res) => {
       activities: activities.slice(0, limit)
     });
   } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// @desc    Get real-time system health metrics
+// @route   GET /api/admin/system-health
+// @access  Private/Admin
+exports.getSystemHealth = async (req, res) => {
+  try {
+    const mongoose = require('mongoose');
+    const uptimeSeconds = process.uptime();
+    const mem = process.memoryUsage();
+    const heapUsedMB  = Math.round(mem.heapUsed  / 1024 / 1024);
+    const heapTotalMB = Math.round(mem.heapTotal / 1024 / 1024);
+    const rssMB       = Math.round(mem.rss       / 1024 / 1024);
+    const memPercent  = Math.round((mem.heapUsed / mem.heapTotal) * 100);
+
+    const activeUsers24h = await User.countDocuments({
+      lastActive: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }
+    });
+
+    let dbStats = null;
+    try {
+      dbStats = await mongoose.connection.db.stats();
+    } catch (_) {}
+
+    res.json({
+      uptimeSeconds,
+      serverStartTime: new Date(Date.now() - uptimeSeconds * 1000).toISOString(),
+      memory: {
+        heapUsedMB,
+        heapTotalMB,
+        rssMB,
+        heapPercent: memPercent
+      },
+      database: dbStats ? {
+        collections: dbStats.collections,
+        dataSizeMB: Math.round(dbStats.dataSize / 1024 / 1024 * 10) / 10,
+        storageSizeMB: Math.round(dbStats.storageSize / 1024 / 1024 * 10) / 10,
+        objects: dbStats.objects
+      } : null,
+      activeUsers24h,
+      nodeVersion: process.version,
+      environment: process.env.NODE_ENV || 'development'
+    });
+  } catch (error) {
+    console.error('System health error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };

@@ -1,5 +1,7 @@
 const User = require('../models/User');
 const Badge = require('../models/Badge');
+const Community = require('../models/Community');
+const Opportunity = require('../models/Opportunity');
 
 // Badge definitions
 const BADGE_DEFINITIONS = [
@@ -193,20 +195,21 @@ async function checkAndAwardBadges(userId) {
         case 'people_helped':
           meetsCriteria = stats.peopleHelped >= badge.criteria.threshold;
           break;
-        case 'communities_joined':
-          // Count communities user is member of
-          meetsCriteria = user.communities?.length >= badge.criteria.threshold;
+        case 'communities_joined': {
+          const count = await Community.countDocuments({ 'members.user': user._id });
+          meetsCriteria = count >= badge.criteria.threshold;
           break;
+        }
         case 'skills_added':
-          meetsCriteria = user.profile?.skills?.length >= badge.criteria.threshold;
+          meetsCriteria = (user.profile?.skills?.length ?? 0) >= badge.criteria.threshold;
           break;
-        case 'events_created':
-          // This would need to check opportunities created by user
-          meetsCriteria = false; // Implement when needed
+        case 'events_created': {
+          const count = await Opportunity.countDocuments({ createdBy: user._id });
+          meetsCriteria = count >= badge.criteria.threshold;
           break;
+        }
         case 'applications_accepted':
-          // This would need to check accepted applications
-          meetsCriteria = false; // Implement when needed
+          meetsCriteria = false;
           break;
       }
 
@@ -246,33 +249,48 @@ async function getUserBadgeProgress(userId) {
       earnedAt: b.earnedAt
     })).filter(b => b._id);
 
+    // Compute counts that require DB queries once, outside the map
+    const communityCount = await Community.countDocuments({ 'members.user': user._id });
+    const createdCount   = await Opportunity.countDocuments({ createdBy: user._id });
+
     const available = allBadges
       .filter(badge => !earnedBadgeIds.includes(badge._id.toString()))
       .map(badge => {
         let progress = 0;
-        const stats = user.stats;
+        let current  = 0;
+        const stats  = user.stats;
 
         switch (badge.criteria.type) {
           case 'events_completed':
-            progress = Math.min(100, (stats.totalEvents / badge.criteria.threshold) * 100);
+            current  = stats.totalEvents;
+            progress = Math.min(100, (current / badge.criteria.threshold) * 100);
             break;
           case 'hours_logged':
-            progress = Math.min(100, (stats.totalHours / badge.criteria.threshold) * 100);
+            current  = stats.totalHours;
+            progress = Math.min(100, (current / badge.criteria.threshold) * 100);
             break;
           case 'people_helped':
-            progress = Math.min(100, (stats.peopleHelped / badge.criteria.threshold) * 100);
+            current  = stats.peopleHelped;
+            progress = Math.min(100, (current / badge.criteria.threshold) * 100);
             break;
           case 'communities_joined':
-            progress = Math.min(100, ((user.communities?.length || 0) / badge.criteria.threshold) * 100);
+            current  = communityCount;
+            progress = Math.min(100, (current / badge.criteria.threshold) * 100);
             break;
           case 'skills_added':
-            progress = Math.min(100, ((user.profile?.skills?.length || 0) / badge.criteria.threshold) * 100);
+            current  = user.profile?.skills?.length || 0;
+            progress = Math.min(100, (current / badge.criteria.threshold) * 100);
+            break;
+          case 'events_created':
+            current  = createdCount;
+            progress = Math.min(100, (current / badge.criteria.threshold) * 100);
             break;
         }
 
         return {
           ...badge.toObject(),
-          progress: Math.round(progress)
+          progress: Math.round(progress),
+          current,
         };
       });
 

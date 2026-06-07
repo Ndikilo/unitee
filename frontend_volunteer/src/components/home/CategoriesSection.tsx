@@ -44,11 +44,12 @@ const CategoriesSection: React.FC<CategoriesSectionProps> = ({ onCategoryClick }
   const [selected, setSelected] = useState<string | null>(null);
 
   useEffect(() => {
-    opportunityAPI.getAll()
-      .then((opps: any) => {
+    opportunityAPI.getAll({ status: 'published', limit: 100 })
+      .then((res: any) => {
+        const list: any[] = Array.isArray(res) ? res : (res?.opportunities ?? []);
         const counts: Record<string, number> = {};
-        (opps || []).forEach((o: any) => {
-          counts[o.category] = (counts[o.category] || 0) + 1;
+        list.forEach((o: any) => {
+          if (o.category) counts[o.category] = (counts[o.category] || 0) + 1;
         });
         setCategoryCounts(counts);
       })
@@ -112,8 +113,8 @@ const CategoriesSection: React.FC<CategoriesSectionProps> = ({ onCategoryClick }
                         : 'Explore'}
                     </span>
                     <span className="text-white text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity">
-                      Browse →
                     </span>
+                      Browse →
                   </div>
                 </div>
               </button>

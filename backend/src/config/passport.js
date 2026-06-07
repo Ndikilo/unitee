@@ -1,6 +1,6 @@
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
-const Volunteer = require('../models/Volunteer');
+const User = require('../models/User');
 
 // Only configure Google OAuth if credentials are provided
 if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
@@ -16,50 +16,45 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
     try {
       const email = profile.emails[0].value;
 
-      // Check if volunteer already exists with this email
-      let volunteer = await Volunteer.findOne({ email });
+      // Check if user already exists
+      let user = await User.findOne({ $or: [{ googleId: profile.id }, { email }] });
 
-      if (volunteer) {
-        // Link Google ID if not already linked
-        if (!volunteer.googleId) {
-          volunteer.googleId = profile.id;
-          volunteer.verification.emailVerified = true;
-          await volunteer.save({ validateBeforeSave: false });
+      if (user) {
+        if (!user.googleId) {
+          user.googleId = profile.id;
+          user.emailVerified = true;
+          await user.save({ validateBeforeSave: false });
         }
-        return done(null, { doc: volunteer, userType: 'volunteer' });
+        return done(null, user);
       }
 
-      // Create new volunteer via Google
-      volunteer = await Volunteer.create({
+      // Create new user via Google OAuth
+      user = await User.create({
         googleId: profile.id,
         name: profile.displayName,
         email,
+        emailVerified: true,
+        role: 'user',
         profile: {
           avatar: profile.photos?.[0]?.value || '',
         },
-        verification: {
-          emailVerified: true, // Google emails are pre-verified
-        },
       });
 
-      done(null, { doc: volunteer, userType: 'volunteer' });
+      done(null, user);
     } catch (error) {
       done(error, null);
     }
   }));
 }
 
-passport.serializeUser((payload, done) => {
-  done(null, { id: payload.doc._id, userType: payload.userType });
+passport.serializeUser((user, done) => {
+  done(null, user._id);
 });
 
-passport.deserializeUser(async ({ id, userType }, done) => {
+passport.deserializeUser(async (id, done) => {
   try {
-    let doc = null;
-    if (userType === 'volunteer') {
-      doc = await Volunteer.findById(id);
-    }
-    done(null, doc ? { doc, userType } : null);
+    const user = await User.findById(id);
+    done(null, user);
   } catch (error) {
     done(error, null);
   }

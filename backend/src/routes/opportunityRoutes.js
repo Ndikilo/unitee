@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const { 
-  createOpportunity, 
+const {
+  createOpportunity,
   getOpportunities,
   getOpportunity,
   updateOpportunity,
@@ -10,7 +10,9 @@ const {
   getUserOpportunities,
   addReview,
   getTestimonials,
-  deleteOpportunity
+  deleteOpportunity,
+  logHours,
+  getRecommended,
 } = require('../controllers/opportunityController');
 const { protect } = require('../middleware/auth');
 
@@ -19,6 +21,7 @@ router.route('/')
   .post(protect, createOpportunity);
 
 router.get('/my-opportunities', protect, getUserOpportunities);
+router.get('/recommended', protect, getRecommended);
 router.get('/testimonials', getTestimonials);
 
 router.route('/:id')
@@ -31,5 +34,6 @@ router.route('/:id/signup')
   .delete(protect, cancelSignup);
 
 router.post('/:id/review', protect, addReview);
+router.post('/:id/log-hours', protect, logHours);
 
 module.exports = router;

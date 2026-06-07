@@ -1,14 +1,15 @@
 const express = require('express');
 const router = express.Router();
-const { 
-  createCommunity, 
-  getCommunities, 
+const {
+  createCommunity,
+  getCommunities,
   getCommunity,
   updateCommunity,
   joinCommunity,
   leaveCommunity,
   getUserCommunities,
-  deleteCommunity
+  deleteCommunity,
+  getRecommended,
 } = require('../controllers/communityController');
 const { protect } = require('../middleware/auth');
 
@@ -17,6 +18,7 @@ router.route('/')
   .post(protect, createCommunity);
 
 router.get('/my-communities', protect, getUserCommunities);
+router.get('/recommended', protect, getRecommended);
 
 router.route('/:id')
   .get(getCommunity)

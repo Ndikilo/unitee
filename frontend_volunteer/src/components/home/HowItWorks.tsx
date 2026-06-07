@@ -95,9 +95,9 @@ const HowItWorks: React.FC = () => {
         {/* Bottom quote */}
         <div className="mt-16 bg-gradient-to-r from-orange-50 to-blue-50 rounded-2xl p-8 text-center border border-orange-100">
           <p className="text-lg font-semibold text-gray-800 mb-1">
-            "Volunteering is not just giving time — it's building stronger communities."
+            "Volunteering is not just giving time - it's building stronger communities."
           </p>
-          <p className="text-sm text-gray-500">— UNITEE Community</p>
+          <p className="text-sm text-gray-500">- UNITEE Community</p>
         </div>
 
       </div>

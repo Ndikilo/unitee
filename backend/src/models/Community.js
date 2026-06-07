@@ -14,7 +14,12 @@ const communitySchema = new mongoose.Schema({
   },
   category: {
     type: String,
-    enum: ['Environment', 'Education', 'Healthcare', 'Humanitarian', 'Social Services', 'Economic Development'],
+    enum: [
+      'Environment', 'Education', 'Healthcare', 'Humanitarian',
+      'Social Services', 'Economic Development',
+      'Arts & Culture', 'Sports & Recreation', 'Youth Development',
+      'Animal Welfare', 'Technology', 'Food & Nutrition'
+    ],
     required: true
   },
   location: {
@@ -138,12 +143,17 @@ communitySchema.methods.isAdmin = function(userId) {
          this.members.some(m => m.user.toString() === userId.toString() && ['admin', 'moderator'].includes(m.role));
 };
 
-// Indexes for better performance
+// ── Indexes ────────────────────────────────────────────────────────────────
 communitySchema.index({ name: 'text', description: 'text' });
-communitySchema.index({ category: 1 });
-communitySchema.index({ 'location.city': 1 });
-communitySchema.index({ isActive: 1 });
+// Common browse filter: active + category
+communitySchema.index({ isActive: 1, category: 1 });
+// City browse (with isActive)
+communitySchema.index({ isActive: 1, 'location.city': 1 });
+// Verification queue
 communitySchema.index({ verificationStatus: 1 });
+// Creator lookup
 communitySchema.index({ createdBy: 1 });
+// Member lookup (for getUserCommunities)
+communitySchema.index({ 'members.user': 1 });
 
 module.exports = mongoose.model('Community', communitySchema);

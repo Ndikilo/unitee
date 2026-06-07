@@ -73,12 +73,16 @@ const CommunityDetail: React.FC = () => {
 
     try {
       setJoining(true);
-      await communityAPI.join(id!);
+      const res = await communityAPI.join(id!);
       setCommunity({ ...community, isMember: true, stats: { ...community.stats, totalVolunteers: community.stats.totalVolunteers + 1 } });
-      toast({
-        title: "Success!",
-        description: "You've joined the community",
-      });
+      const newBadges: any[] = res?.newBadges ?? [];
+      if (newBadges.length > 0) {
+        newBadges.forEach((badge: any) => {
+          toast({ title: `${badge.icon ?? '🏆'} Badge Earned!`, description: `You earned the "${badge.name}" badge!` });
+        });
+      } else {
+        toast({ title: 'Joined!', description: "You've joined the community." });
+      }
     } catch (err: any) {
       toast({
         title: "Error",
@@ -134,10 +138,13 @@ const CommunityDetail: React.FC = () => {
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-6xl">
-      <Button variant="ghost" onClick={() => navigate('/communities')} className="mb-4">
-        <ArrowLeft className="h-4 w-4 mr-2" />
-        Back to Communities
-      </Button>
+      <button
+        onClick={() => window.history.length > 1 ? navigate(-1) : navigate('/communities')}
+        className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-800 transition-colors mb-4"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Back
+      </button>
 
       {/* Header */}
       {community.image && (

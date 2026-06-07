@@ -1,30 +1,33 @@
 const Opportunity = require('../models/Opportunity');
 const Community = require('../models/Community');
 const User = require('../models/User');
+const { checkAndAwardBadges } = require('../utils/badgeSystem');
 
 // @desc    Create an opportunity
 // @route   POST /api/opportunities
 // @access  Private
 exports.createOpportunity = async (req, res) => {
   try {
-    const { 
-      title, description, category, location, dateTime, requirements, 
-      capacity, community, contactInfo, impact, tags, isEmergency 
+    const {
+      title, description, category, location, dateTime, requirements,
+      capacity, community, contactInfo, impact, tags, isEmergency
     } = req.body;
 
-    // Check if community exists and user is a member
-    const communityExists = await Community.findOne({
-      _id: community,
-      $or: [
-        { createdBy: req.user.id },
-        { 'members.user': req.user.id }
-      ]
-    });
-
-    if (!communityExists) {
-      return res.status(403).json({ 
-        message: 'Not authorized to create opportunities in this community' 
+    // If a community is specified, verify the user has access to it
+    if (community) {
+      const communityExists = await Community.findOne({
+        _id: community,
+        $or: [
+          { createdBy: req.user._id || req.user.id },
+          { 'members.user': req.user._id || req.user.id }
+        ]
       });
+
+      if (!communityExists) {
+        return res.status(403).json({
+          message: 'Not authorized to create opportunities in this community'
+        });
+      }
     }
 
     const opportunity = await Opportunity.create({
@@ -39,20 +42,23 @@ exports.createOpportunity = async (req, res) => {
       },
       requirements,
       capacity: {
-        required: capacity.required || capacity
+        required: (typeof capacity === 'object' ? capacity.required : capacity) || 10
       },
-      community,
+      ...(community ? { community } : {}),
       contactInfo,
       impact,
       tags,
       isEmergency,
-      createdBy: req.user.id
+      createdBy: req.user._id
     });
 
     await opportunity.populate([
       { path: 'community', select: 'name' },
       { path: 'createdBy', select: 'name email' }
     ]);
+
+    // Fire-and-forget badge check for the organizer (events_created criterion)
+    checkAndAwardBadges(req.user._id).catch(() => {});
 
     res.status(201).json(opportunity);
   } catch (error) {
@@ -66,10 +72,14 @@ exports.createOpportunity = async (req, res) => {
 // @access  Public
 exports.getOpportunities = async (req, res) => {
   try {
-    const { 
-      category, city, community, date, search, status, 
-      isEmergency, page = 1, limit = 10, sortBy = 'createdAt' 
+    const ALLOWED_SORT_FIELDS = new Set(['createdAt', 'updatedAt', 'dateTime.start', 'views', 'capacity.registered']);
+    const {
+      category, city, community, date, search, status,
+      isEmergency, sortBy = 'createdAt'
     } = req.query;
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 10));
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const safeSortBy = ALLOWED_SORT_FIELDS.has(sortBy) ? sortBy : 'createdAt';
     
     let query = { status: { $in: ['published', 'draft'] } };
     
@@ -101,8 +111,8 @@ exports.getOpportunities = async (req, res) => {
       .populate('community', 'name location')
       .populate('volunteers.user', 'name email profile.avatar')
       .populate('createdBy', 'name organizationName')
-      .sort({ [sortBy]: -1 })
-      .limit(limit * 1)
+      .sort({ [safeSortBy]: -1 })
+      .limit(limit)
       .skip((page - 1) * limit);
       
     const total = await Opportunity.countDocuments(query);
@@ -155,7 +165,7 @@ exports.updateOpportunity = async (req, res) => {
     }
     
     // Check authorization
-    if (opportunity.createdBy.toString() !== req.user.id && req.user.role !== 'admin') {
+    if (opportunity.createdBy.toString() !== req.user._id.toString() && req.userType !== 'admin') {
       return res.status(403).json({ message: 'Not authorized to update this opportunity' });
     }
     
@@ -190,13 +200,13 @@ exports.signUpOpportunity = async (req, res) => {
     }
 
     // Check if already signed up
-    if (opportunity.isUserRegistered(req.user.id)) {
+    if (opportunity.isUserRegistered(req.user._id)) {
       return res.status(400).json({ message: 'Already signed up for this opportunity' });
     }
 
-    await opportunity.addVolunteer(req.user.id);
+    await opportunity.addVolunteer(req.user._id);
     
-    const isOnWaitlist = opportunity.waitlist.some(w => w.user.toString() === req.user.id);
+    const isOnWaitlist = opportunity.waitlist.some(w => w.user.toString() === req.user._id.toString());
     
     res.json({ 
       message: isOnWaitlist ? 'Added to waitlist' : 'Successfully signed up for the opportunity',
@@ -219,11 +229,11 @@ exports.cancelSignup = async (req, res) => {
       return res.status(404).json({ message: 'Opportunity not found' });
     }
 
-    if (!opportunity.isUserRegistered(req.user.id)) {
+    if (!opportunity.isUserRegistered(req.user._id)) {
       return res.status(400).json({ message: 'Not signed up for this opportunity' });
     }
 
-    await opportunity.removeVolunteer(req.user.id);
+    await opportunity.removeVolunteer(req.user._id);
     
     res.json({ 
       message: 'Successfully cancelled signup',
@@ -244,11 +254,11 @@ exports.getUserOpportunities = async (req, res) => {
     let query = {};
     
     if (type === 'created') {
-      query.createdBy = req.user.id;
+      query.createdBy = req.user._id;
     } else {
       query.$or = [
-        { 'volunteers.user': req.user.id },
-        { 'waitlist.user': req.user.id }
+        { 'volunteers.user': req.user._id },
+        { 'waitlist.user': req.user._id }
       ];
     }
     
@@ -277,14 +287,14 @@ exports.addReview = async (req, res) => {
     
     // Check if user participated
     const participated = opportunity.volunteers.some(
-      v => v.user.toString() === req.user.id && v.status === 'attended'
+      v => v.user.toString() === req.user._id.toString() && v.status === 'attended'
     );
     
     if (!participated) {
       return res.status(403).json({ message: 'Can only review opportunities you attended' });
     }
 
-    await opportunity.addReview(req.user.id, rating, comment);
+    await opportunity.addReview(req.user._id, rating, comment);
     
     res.json({ message: 'Review added successfully' });
   } catch (error) {
@@ -350,6 +360,31 @@ exports.getTestimonials = async (req, res) => {
   }
 };
 
+// @desc    Log volunteer hours for a completed opportunity
+// @route   POST /api/opportunities/:id/log-hours
+// @access  Private
+exports.logHours = async (req, res) => {
+  try {
+    const { hours } = req.body;
+    if (!hours || isNaN(parseFloat(hours)) || parseFloat(hours) <= 0) {
+      return res.status(400).json({ message: 'Valid hours value is required' });
+    }
+    const opportunity = await Opportunity.findById(req.params.id);
+    if (!opportunity) {
+      return res.status(404).json({ message: 'Opportunity not found' });
+    }
+    const userId = req.user._id || req.user.id;
+    await User.findByIdAndUpdate(userId, {
+      $inc: { 'stats.totalHours': parseFloat(hours), 'stats.totalEvents': 1 },
+    });
+    const newBadges = await checkAndAwardBadges(userId);
+    res.json({ message: 'Hours logged successfully', hours: parseFloat(hours), newBadges });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
 // @desc    Delete opportunity
 // @route   DELETE /api/opportunities/:id
 // @access  Private
@@ -362,13 +397,50 @@ exports.deleteOpportunity = async (req, res) => {
     }
     
     // Check authorization
-    if (opportunity.createdBy.toString() !== req.user.id && req.user.role !== 'admin') {
+    if (opportunity.createdBy.toString() !== req.user._id.toString() && req.userType !== 'admin') {
       return res.status(403).json({ message: 'Not authorized to delete this opportunity' });
     }
     
     await Opportunity.findByIdAndDelete(req.params.id);
     res.json({ message: 'Opportunity deleted successfully' });
   } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// @desc    Get recommended opportunities for authenticated volunteer
+// @route   GET /api/opportunities/recommended
+// @access  Private
+exports.getRecommended = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id || req.user.id).select('profile');
+    const interests = user?.profile?.interests || [];
+    const skills = user?.profile?.skills || [];
+    const city = user?.profile?.city || '';
+
+    const opportunities = await Opportunity.find({ status: 'active' })
+      .populate('community', 'name')
+      .lean();
+
+    const scored = opportunities.map(opp => {
+      let score = 0;
+      if (interests.includes(opp.category)) score += 3;
+      const oppSkills = opp.requirements?.skills || [];
+      const overlap = skills.filter(s => oppSkills.some(os => os.toLowerCase() === s.toLowerCase())).length;
+      score += overlap * 2;
+      if (city && opp.location?.city?.toLowerCase() === city.toLowerCase()) score += 1;
+      return { ...opp, _score: score };
+    });
+
+    const limit = parseInt(req.query.limit) || 6;
+    const result = scored
+      .filter(o => o._score > 0 || !interests.length)
+      .sort((a, b) => b._score - a._score)
+      .slice(0, limit);
+
+    res.json(result);
+  } catch (error) {
+    console.error(error);
     res.status(500).json({ message: 'Server error' });
   }
 };

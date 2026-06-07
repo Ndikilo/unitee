@@ -17,9 +17,11 @@ import {
 } from 'lucide-react';
 import { communityAPI } from '@/lib/api';
 import { useAuth } from '@/contexts/NewAuthContext';
+import { Sparkles } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import BackButton from '@/components/ui/BackButton';
 
 interface Community {
   _id: string;
@@ -78,9 +80,21 @@ const Communities: React.FC = () => {
   const [totalCount, setTotalCount] = useState(0);
   const itemsPerPage = 12;
 
+  const [recommended, setRecommended] = useState<Community[]>([]);
+  const [loadingRec, setLoadingRec] = useState(false);
+
   useEffect(() => {
     fetchCommunities();
   }, [currentPage, searchQuery, selectedCategory, selectedCity]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    setLoadingRec(true);
+    communityAPI.getRecommended(4)
+      .then((data: any) => setRecommended(Array.isArray(data) ? data : []))
+      .catch(() => setRecommended([]))
+      .finally(() => setLoadingRec(false));
+  }, [isAuthenticated]);
 
   const fetchCommunities = async () => {
     try {
@@ -97,9 +111,9 @@ const Communities: React.FC = () => {
       if (selectedCity) params.city = selectedCity;
 
       const response = await communityAPI.getAll(params);
-      setCommunities(response.data || []);
-      setTotalPages(response.pagination?.pages || 1);
-      setTotalCount(response.pagination?.total || 0);
+      setCommunities(response.communities || response.data || []);
+      setTotalPages(response.totalPages || response.pagination?.pages || 1);
+      setTotalCount(response.total || response.pagination?.total || 0);
     } catch (err: any) {
       setError(err.message || 'Failed to load communities');
       toast({
@@ -215,6 +229,7 @@ const Communities: React.FC = () => {
 
   return (
     <div className="container mx-auto px-4 py-8">
+      <BackButton />
       <div className="mb-8 flex items-start justify-between">
         <div>
           <h1 className="text-3xl font-bold mb-2">Communities</h1>
@@ -281,6 +296,39 @@ const Communities: React.FC = () => {
                 </Button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Recommended section */}
+      {isAuthenticated && !loadingRec && recommended.length > 0 && (
+        <div className="mb-8">
+          <div className="flex items-center gap-2 mb-4">
+            <Sparkles className="h-5 w-5 text-blue-500" />
+            <h2 className="text-lg font-semibold text-gray-900">Recommended for you</h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {recommended.map(community => (
+              <Card
+                key={community._id}
+                className="cursor-pointer hover:shadow-lg transition-shadow border-blue-100 hover:border-blue-300"
+                onClick={() => navigate(`/community/${community._id}`)}
+              >
+                <CardHeader className="pb-2">
+                  <Badge variant="secondary" className="w-fit mb-1 text-xs">{community.category}</Badge>
+                  <CardTitle className="text-base line-clamp-1">{community.name}</CardTitle>
+                  <CardDescription className="line-clamp-2 text-xs">{community.description}</CardDescription>
+                </CardHeader>
+                <CardContent className="pt-0 space-y-1">
+                  <div className="flex items-center text-xs text-gray-500">
+                    <MapPin className="h-3 w-3 mr-1" />{community.location?.city}
+                  </div>
+                  <div className="flex items-center text-xs text-gray-500">
+                    <Users className="h-3 w-3 mr-1" />{community.stats?.totalVolunteers ?? 0} members
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
           </div>
         </div>
       )}

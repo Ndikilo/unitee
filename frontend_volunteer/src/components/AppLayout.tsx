@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/NewAuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 
@@ -12,13 +13,9 @@ import CategoriesSection from '@/components/home/CategoriesSection';
 import HowItWorks from '@/components/home/HowItWorks';
 import TestimonialsSection from '@/components/home/TestimonialsSection';
 import CTASection from '@/components/home/CTASection';
-import PartnersSection from '@/components/home/PartnersSection';
 import ImpactStats from '@/components/home/ImpactStats';
 import OpportunityGrid from '@/components/opportunities/OpportunityGrid';
 import CommunitiesGrid from '@/components/communities/CommunitiesGrid';
-import VolunteerDashboard from '@/components/dashboard/VolunteerDashboard';
-import OrganizerDashboard from '@/components/dashboard/OrganizerDashboard';
-import AdminDashboard from '@/components/admin/AdminDashboard';
 import GetStartedModal from '@/components/auth/GetStartedModal';
 
 // Pages
@@ -32,6 +29,8 @@ import CertificateVerify from '@/pages/CertificateVerify';
 
 
 const AppLayout: React.FC = () => {
+  const navigate = useNavigate();
+
   // Try to get language context, but provide fallback if not available
   let t = (key: string) => key; // Default fallback function
   try {
@@ -162,37 +161,17 @@ const AppLayout: React.FC = () => {
         );
 
       case 'impact':
-        return (
-          <div className="min-h-screen bg-gray-50 pt-16">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-              <VolunteerDashboard />
-            </div>
-          </div>
-        );
-
-      case 'dashboard':
-        return (
-          <div className="min-h-screen bg-gray-50 pt-16">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-              {user?.role === 'organizer' ? (
-                <OrganizerDashboard />
-              ) : user?.role === 'admin' ? (
-                <AdminDashboard />
-              ) : (
-                <VolunteerDashboard />
-              )}
-            </div>
-          </div>
-        );
+      case 'dashboard': {
+        const role = (user as any)?.role || (user as any)?.userType;
+        if (role === 'admin') { navigate('/admin-dashboard', { replace: true }); return null; }
+        if (role === 'organizer' || role === 'organization') { navigate('/organizer-dashboard', { replace: true }); return null; }
+        navigate('/volunteer-dashboard', { replace: true });
+        return null;
+      }
 
       case 'admin':
-        return (
-          <div className="min-h-screen bg-gray-50 pt-16">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-              <AdminDashboard />
-            </div>
-          </div>
-        );
+        navigate('/admin-dashboard', { replace: true });
+        return null;
 
       // Footer Pages
       case 'about':
@@ -276,9 +255,6 @@ const AppLayout: React.FC = () => {
 
             {/* Testimonials */}
             <TestimonialsSection />
-
-            {/* Partners */}
-            <PartnersSection />
 
             {/* CTA Section */}
             <CTASection 

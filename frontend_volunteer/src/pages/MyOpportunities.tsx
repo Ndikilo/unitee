@@ -6,21 +6,24 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { 
-  Calendar, 
-  MapPin, 
-  Users, 
-  Clock, 
+import {
+  Calendar,
+  MapPin,
+  Users,
+  Clock,
   Loader2,
   CheckCircle,
   XCircle,
   AlertCircle,
   Award,
-  Download
+  Eye
 } from 'lucide-react';
-import { opportunityAPI, certificateAPI } from '@/lib/api';
+import { opportunityAPI, volunteerAPI } from '@/lib/api';
+import { useAuth } from '@/contexts/NewAuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
+import CertificatePreviewModal from '@/components/certificates/CertificatePreviewModal';
+import BackButton from '@/components/ui/BackButton';
 
 interface Opportunity {
   _id: string;
@@ -53,6 +56,7 @@ interface Opportunity {
 }
 
 const MyOpportunities: React.FC = () => {
+  const { user } = useAuth();
   const { toast } = useToast();
   const [registeredOpportunities, setRegisteredOpportunities] = useState<Opportunity[]>([]);
   const [createdOpportunities, setCreatedOpportunities] = useState<Opportunity[]>([]);
@@ -63,7 +67,7 @@ const MyOpportunities: React.FC = () => {
   const [selectedOpportunity, setSelectedOpportunity] = useState<Opportunity | null>(null);
   const [hoursToLog, setHoursToLog] = useState('');
   const [loggingHours, setLoggingHours] = useState(false);
-  const [downloadingCert, setDownloadingCert] = useState<string | null>(null);
+  const [certPreviewOppId, setCertPreviewOppId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchOpportunities();
@@ -128,51 +132,28 @@ const MyOpportunities: React.FC = () => {
 
   const submitHours = async () => {
     if (!selectedOpportunity || !hoursToLog) return;
-    
     try {
       setLoggingHours(true);
-      // This would call an API to log hours - placeholder for now
-      // await opportunityAPI.logHours(selectedOpportunity._id, parseFloat(hoursToLog));
-      
-      toast({
-        title: "Hours Logged",
-        description: `Successfully logged ${hoursToLog} hours`,
-      });
-      
+      const res = await volunteerAPI.logHours(selectedOpportunity._id, parseFloat(hoursToLog));
+      const newBadges: any[] = res?.newBadges ?? [];
+      if (newBadges.length > 0) {
+        newBadges.forEach((badge: any) => {
+          toast({ title: `${badge.icon ?? '🏆'} Badge Earned!`, description: `You earned the "${badge.name}" badge — ${badge.description}` });
+        });
+      }
+      toast({ title: 'Hours Logged', description: `Successfully logged ${hoursToLog} hours` });
       setShowHoursDialog(false);
       setHoursToLog('');
       fetchOpportunities();
     } catch (err: any) {
-      toast({
-        title: "Error",
-        description: "Failed to log hours",
-        variant: "destructive",
-      });
+      toast({ title: 'Error', description: err.message || 'Failed to log hours', variant: 'destructive' });
     } finally {
       setLoggingHours(false);
     }
   };
 
-  const handleDownloadCertificate = async (opportunityId: string) => {
-    try {
-      setDownloadingCert(opportunityId);
-      // This would fetch the certificate ID from the opportunity
-      // For now, using opportunityId as placeholder
-      await certificateAPI.downloadCertificate(opportunityId);
-      
-      toast({
-        title: "Success",
-        description: "Certificate downloaded successfully",
-      });
-    } catch (err: any) {
-      toast({
-        title: "Error",
-        description: "Failed to download certificate",
-        variant: "destructive",
-      });
-    } finally {
-      setDownloadingCert(null);
-    }
+  const handleViewCertificate = (opportunityId: string) => {
+    setCertPreviewOppId(opportunityId);
   };
 
   const formatDate = (dateString: string) => {
@@ -299,21 +280,11 @@ const MyOpportunities: React.FC = () => {
                 <Button
                   variant="default"
                   size="sm"
-                  className="w-full"
-                  onClick={() => handleDownloadCertificate(opportunity._id)}
-                  disabled={downloadingCert === opportunity._id}
+                  className="w-full bg-blue-600 hover:bg-blue-700"
+                  onClick={() => handleViewCertificate(opportunity._id)}
                 >
-                  {downloadingCert === opportunity._id ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Downloading...
-                    </>
-                  ) : (
-                    <>
-                      <Download className="h-4 w-4 mr-2" />
-                      Download Certificate
-                    </>
-                  )}
+                  <Eye className="h-4 w-4 mr-2" />
+                  View Certificate
                 </Button>
               </div>
             )}
@@ -325,6 +296,7 @@ const MyOpportunities: React.FC = () => {
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-6xl">
+      <BackButton />
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-3xl font-bold mb-2">My Opportunities</h1>
@@ -436,6 +408,15 @@ const MyOpportunities: React.FC = () => {
           </TabsContent>
         )}
       </Tabs>
+
+      {/* Certificate Preview Modal */}
+      {certPreviewOppId && user && (
+        <CertificatePreviewModal
+          userId={user._id}
+          opportunityId={certPreviewOppId}
+          onClose={() => setCertPreviewOppId(null)}
+        />
+      )}
 
       {/* Log Hours Dialog */}
       <Dialog open={showHoursDialog} onOpenChange={setShowHoursDialog}>

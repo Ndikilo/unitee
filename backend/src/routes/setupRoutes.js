@@ -4,6 +4,7 @@ const Volunteer = require('../models/Volunteer');
 const Organization = require('../models/Organization');
 const Community = require('../models/Community');
 const Opportunity = require('../models/Opportunity');
+const User = require('../models/User');
 const router = express.Router();
 
 // @desc    Create initial super admin (one-time setup)
@@ -54,21 +55,31 @@ router.get('/admin-exists', async (req, res) => {
 // @access  Public
 router.get('/public-stats', async (req, res) => {
   try {
-    const [totalVolunteers, totalOrgs, totalCommunities, totalOpportunities, totalHours] = await Promise.all([
+    const [
+      totalVolunteers, totalOrgs, totalCommunities, totalOpportunities, totalHoursVol,
+      userVolunteers, userOrgs, userHours,
+    ] = await Promise.all([
       Volunteer.countDocuments({ isActive: true }),
       Organization.countDocuments({ isActive: true }),
       Community.countDocuments({ isActive: true }),
       Opportunity.countDocuments({ status: 'published' }),
       Volunteer.aggregate([{ $group: { _id: null, total: { $sum: '$stats.totalHours' } } }]).then(r => r[0]?.total || 0),
+      User.countDocuments({ role: 'user', isActive: true }),
+      User.countDocuments({ role: 'organizer', isActive: true }),
+      User.aggregate([{ $group: { _id: null, total: { $sum: '$stats.totalHours' } } }]).then(r => r[0]?.total || 0),
     ]);
 
+    // Prefer User collection (primary auth) over dedicated collections
+    const resolvedVols = userVolunteers || totalVolunteers;
+    const resolvedOrgs = userOrgs || totalOrgs;
+
     res.json({
-      totalUsers: totalVolunteers + totalOrgs,
-      totalVolunteers,
-      totalOrganizations: totalOrgs,
+      totalUsers: resolvedVols + resolvedOrgs,
+      totalVolunteers: resolvedVols,
+      totalOrganizations: resolvedOrgs,
       totalCommunities,
       totalOpportunities,
-      totalVolunteerHours: totalHours,
+      totalVolunteerHours: userHours || totalHoursVol,
     });
   } catch {
     res.status(500).json({ message: 'Server error' });

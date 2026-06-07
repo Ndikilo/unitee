@@ -5,7 +5,9 @@ const {
   getUserCertificates,
   downloadCertificate,
   revokeCertificate,
-  getCertificateStats
+  getCertificateStats,
+  getMyPassport,
+  downloadMyPassport,
 } = require('../controllers/certificateController');
 
 const { protect, authorize } = require('../middleware/auth');
@@ -19,6 +21,8 @@ router.get('/verify/:certificateId', verifyCertificate);
 router.use(protect);
 
 router.post('/generate', authorize('organization', 'admin'), generateCertificate);
+router.get('/my-passport', getMyPassport);
+router.get('/my-passport/download', downloadMyPassport);
 router.get('/user/:userId', getUserCertificates);
 router.get('/download/:certificateId', downloadCertificate);
 router.put('/revoke/:certificateId', authorize('organization', 'admin'), revokeCertificate);

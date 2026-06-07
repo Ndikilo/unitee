@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useAuth } from '@/contexts/NewAuthContext';
 import { opportunityAPI } from '@/lib/api';
 import OpportunityCard, { Opportunity } from './OpportunityCard';
 import OpportunityDetailModal from './OpportunityDetailModal';
@@ -10,6 +11,7 @@ import {
   ChevronDownIcon,
   XIcon
 } from '@/components/icons/Icons';
+import { useToast } from '@/hooks/use-toast';
 
 const categories = [
   'All Categories',
@@ -32,8 +34,34 @@ const cities = [
   'Bafoussam'
 ];
 
+// Normalise a backend opportunity document to the flat Opportunity shape OpportunityCard expects
+const normaliseOpportunity = (doc: any): Opportunity => ({
+  id:                  doc._id ?? doc.id,
+  title:               doc.title,
+  description:         doc.description,
+  short_description:   doc.description?.slice(0, 120),
+  category:            doc.category,
+  skills_required:     doc.requirements?.skills ?? [],
+  location:            doc.location?.address ?? doc.location?.city ?? '',
+  city:                doc.location?.city ?? '',
+  country:             doc.location?.country ?? 'Cameroon',
+  start_date:          doc.dateTime?.start ?? doc.start_date ?? '',
+  end_date:            doc.dateTime?.end ?? doc.end_date ?? '',
+  volunteers_needed:   doc.capacity?.required ?? doc.volunteers_needed ?? 0,
+  volunteers_accepted: doc.capacity?.current  ?? doc.volunteers_accepted ?? 0,
+  hours_per_volunteer: doc.dateTime?.duration ?? doc.hours_per_volunteer,
+  is_urgent:           doc.isUrgent   ?? doc.is_urgent   ?? false,
+  is_emergency:        doc.isEmergency ?? doc.is_emergency ?? false,
+  status:              doc.status,
+  image_url:           doc.image_url,
+  organizer_name:      doc.createdBy?.organizationName ?? doc.createdBy?.name ?? doc.organizer_name ?? '',
+  organizer_verified:  doc.createdBy?.isVerified ?? doc.organizer_verified ?? false,
+});
+
 const OpportunityGrid: React.FC = () => {
   const { t } = useLanguage();
+  const { isAuthenticated } = useAuth();
+  const { toast } = useToast();
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -43,48 +71,46 @@ const OpportunityGrid: React.FC = () => {
   const [appliedIds, setAppliedIds] = useState<Set<string>>(new Set());
   const [selectedOpportunity, setSelectedOpportunity] = useState<Opportunity | null>(null);
 
-
-
   useEffect(() => {
     const fetchOpportunities = async () => {
       setLoading(true);
       try {
-        const data = await opportunityAPI.getAll();
-        // Ensure data is always an array
-        const opportunitiesArray = Array.isArray(data) ? data : (data?.data && Array.isArray(data.data) ? data.data : []);
-        setOpportunities(opportunitiesArray);
-      } catch (err) {
-        console.error('Failed to fetch opportunities:', err);
+        const data = await opportunityAPI.getAll({ status: 'published', limit: 50 });
+        const raw = Array.isArray(data) ? data : (data?.opportunities ?? data?.data ?? []);
+        setOpportunities(raw.map(normaliseOpportunity));
+      } catch {
         setOpportunities([]);
       } finally {
         setLoading(false);
       }
     };
-
     fetchOpportunities();
   }, []);
 
   const filteredOpportunities = useMemo(() => {
-    // Ensure opportunities is always an array before filtering
-    const opportunitiesArray = Array.isArray(opportunities) ? opportunities : [];
-    return opportunitiesArray.filter((opp) => {
+    return opportunities.filter((opp) => {
       const matchesSearch = searchQuery === '' ||
         opp.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         opp.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
         opp.location.toLowerCase().includes(searchQuery.toLowerCase());
-
-      const matchesCategory = selectedCategory === 'All Categories' ||
-        opp.category === selectedCategory;
-
-      const matchesCity = selectedCity === 'All Cities' ||
-        opp.city === selectedCity;
-
+      const matchesCategory = selectedCategory === 'All Categories' || opp.category === selectedCategory;
+      const matchesCity = selectedCity === 'All Cities' || opp.city === selectedCity;
       return matchesSearch && matchesCategory && matchesCity;
     });
   }, [opportunities, searchQuery, selectedCategory, selectedCity]);
 
-  const handleApply = (id: string) => {
-    setAppliedIds(prev => new Set([...prev, id]));
+  const handleApply = async (id: string) => {
+    if (!isAuthenticated) {
+      toast({ title: 'Sign in required', description: 'Please log in to sign up for this opportunity.', variant: 'destructive' });
+      return;
+    }
+    try {
+      await opportunityAPI.signUp(id);
+      setAppliedIds(prev => new Set([...prev, id]));
+      toast({ title: 'Signed up!', description: 'You have successfully signed up for this opportunity.' });
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Could not sign up for this opportunity.', variant: 'destructive' });
+    }
   };
 
   const clearFilters = () => {

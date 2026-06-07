@@ -25,19 +25,154 @@ const CommunitiesGrid: React.FC = () => {
   const [joinedIds, setJoinedIds] = useState<Set<string>>(new Set());
   const [selectedCommunity, setSelectedCommunity] = useState<Community | null>(null);
 
-  const sampleCommunities: Community[] = [];
+  const sampleCommunities: Community[] = [
+    {
+      id: 'comm-1',
+      name: 'Douala Green Warriors',
+      description: 'Environmental activists working to make Douala cleaner and greener. Join us for regular cleanup drives and tree planting initiatives.',
+      location: 'Douala',
+      city: 'Douala',
+      country: 'Cameroon',
+      member_count: 156,
+      is_public: true,
+      image_url: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?w=800'
+    },
+    {
+      id: 'comm-2',
+      name: 'Yaoundé Youth Network',
+      description: 'Connecting young volunteers across the capital city. We organize events, workshops, and community service projects.',
+      location: 'Yaoundé',
+      city: 'Yaoundé',
+      country: 'Cameroon',
+      member_count: 243,
+      is_public: true,
+      image_url: 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=800'
+    },
+    {
+      id: 'comm-3',
+      name: 'Buea Tech Volunteers',
+      description: 'Tech professionals giving back to the community through coding workshops, digital literacy programs, and tech support.',
+      location: 'Buea',
+      city: 'Buea',
+      country: 'Cameroon',
+      member_count: 89,
+      is_public: true,
+      image_url: 'https://images.unsplash.com/photo-1531482615713-2afd69097998?w=800'
+    },
+    {
+      id: 'comm-4',
+      name: 'Limbe Coastal Guardians',
+      description: 'Protecting our beaches and marine ecosystems. Regular beach cleanups and environmental awareness campaigns.',
+      location: 'Limbe',
+      city: 'Limbe',
+      country: 'Cameroon',
+      member_count: 67,
+      is_public: true,
+      image_url: 'https://images.unsplash.com/photo-1618477461853-cf6ed80faba5?w=800'
+    },
+    {
+      id: 'comm-5',
+      name: 'Bamenda Health Heroes',
+      description: 'Healthcare volunteers serving the Northwest region. Medical outreach, health education, and community support.',
+      location: 'Bamenda',
+      city: 'Bamenda',
+      country: 'Cameroon',
+      member_count: 112,
+      is_public: true,
+      image_url: 'https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=800'
+    },
+    {
+      id: 'comm-6',
+      name: 'Kribi Beach Volunteers',
+      description: 'Dedicated to preserving the beauty of Kribi beaches and supporting local fishing communities.',
+      location: 'Kribi',
+      city: 'Kribi',
+      country: 'Cameroon',
+      member_count: 45,
+      is_public: true,
+      image_url: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800'
+    },
+    {
+      id: 'comm-7',
+      name: 'Bafoussam Women Empowerment',
+      description: 'Supporting women entrepreneurs and promoting gender equality through skills training and mentorship.',
+      location: 'Bafoussam',
+      city: 'Bafoussam',
+      country: 'Cameroon',
+      member_count: 78,
+      is_public: true,
+      image_url: 'https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?w=800'
+    },
+    {
+      id: 'comm-8',
+      name: 'Douala Education Alliance',
+      description: 'Teachers and education advocates working to improve literacy and access to education in underserved areas.',
+      location: 'Douala',
+      city: 'Douala',
+      country: 'Cameroon',
+      member_count: 134,
+      is_public: true,
+      image_url: 'https://images.unsplash.com/photo-1497633762265-9d179a990aa6?w=800'
+    },
+    {
+      id: 'comm-9',
+      name: 'Yaoundé Food Bank Network',
+      description: 'Fighting hunger in the capital through food collection, distribution, and community kitchens.',
+      location: 'Yaoundé',
+      city: 'Yaoundé',
+      country: 'Cameroon',
+      member_count: 198,
+      is_public: true,
+      image_url: 'https://images.unsplash.com/photo-1593113598332-cd288d649433?w=800'
+    },
+    {
+      id: 'comm-10',
+      name: 'Cameroon Animal Welfare',
+      description: 'Protecting and caring for animals across Cameroon. Rescue operations, shelter support, and awareness campaigns.',
+      location: 'Douala',
+      city: 'Douala',
+      country: 'Cameroon',
+      member_count: 56,
+      is_public: true,
+      image_url: 'https://images.unsplash.com/photo-1548199973-03cce0bbc87b?w=800'
+    },
+    {
+      id: 'comm-11',
+      name: 'Buea Mountain Hikers',
+      description: 'Adventure volunteers who combine hiking with environmental conservation on Mount Cameroon.',
+      location: 'Buea',
+      city: 'Buea',
+      country: 'Cameroon',
+      member_count: 92,
+      is_public: true,
+      image_url: 'https://images.unsplash.com/photo-1551632811-561732d1e306?w=800'
+    },
+    {
+      id: 'comm-12',
+      name: 'Limbe Youth Sports Club',
+      description: 'Promoting sports and healthy lifestyles among youth through coaching, tournaments, and fitness programs.',
+      location: 'Limbe',
+      city: 'Limbe',
+      country: 'Cameroon',
+      member_count: 145,
+      is_public: true,
+      image_url: 'https://images.unsplash.com/photo-1461896836934- voices-of-africa?w=800'
+    }
+  ];
 
   useEffect(() => {
     const fetchCommunities = async () => {
       setLoading(true);
       try {
         const data = await communityAPI.getAll();
-        // Ensure data is always an array
-        const communitiesArray = Array.isArray(data) ? data : (data?.data && Array.isArray(data.data) ? data.data : []);
-        setCommunities(communitiesArray);
+        if (data && data.length > 0) {
+          setCommunities(data);
+        } else {
+          setCommunities(sampleCommunities);
+        }
       } catch (err) {
-        console.log('No communities found:', err);
-        setCommunities([]);
+        console.log('Using sample data:', err);
+        setCommunities(sampleCommunities);
       } finally {
         setLoading(false);
       }
@@ -47,9 +182,7 @@ const CommunitiesGrid: React.FC = () => {
   }, []);
 
   const filteredCommunities = useMemo(() => {
-    // Ensure communities is always an array before filtering
-    const communitiesArray = Array.isArray(communities) ? communities : [];
-    return communitiesArray.filter((comm) => {
+    return communities.filter((comm) => {
       const matchesSearch = searchQuery === '' ||
         comm.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (comm.description && comm.description.toLowerCase().includes(searchQuery.toLowerCase()));

@@ -19,7 +19,7 @@ const userSchema = new mongoose.Schema({
   },
   password: {
     type: String,
-    required: [true, 'Please add a password'],
+    required: function() { return !this.googleId; },
     minlength: 6,
     select: false
   },
@@ -37,8 +37,10 @@ const userSchema = new mongoose.Schema({
     default: false
   },
   emailVerificationToken: String,
+  emailVerificationExpires: Date,
   passwordResetToken: String,
   passwordResetExpires: Date,
+  onboardingCompleted: { type: Boolean, default: false },
   profile: {
     avatar: String,
     phone: String,
@@ -47,12 +49,25 @@ const userSchema = new mongoose.Schema({
     bio: String,
     skills: [String],
     interests: [String],
-    dateOfBirth: Date
+    dateOfBirth: Date,
+    purpose: {
+      type: String,
+      enum: ['volunteering', 'internship', 'community_impact', 'professional_development'],
+    },
+    availability: {
+      weekends: { type: Boolean, default: false },
+      evenings: { type: Boolean, default: false },
+      fullTime: { type: Boolean, default: false },
+      remote: { type: Boolean, default: false },
+    },
   },
   organizationName: String,
   organizationDescription: String,
   organizationWebsite: String,
-  organizationType: String,
+  organizationType: {
+    type: String,
+    enum: ['ngo', 'startup', 'school', 'cbo', 'government', 'health', 'religious', 'other'],
+  },
   organizationPhone: String,
   organizationCity: String,
   organizationRegion: String,
@@ -102,11 +117,12 @@ userSchema.methods.matchPassword = async function(enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);
 };
 
-// Generate email verification token
+// Generate email verification token (valid for 24 hours)
 userSchema.methods.generateEmailVerificationToken = function() {
   const crypto = require('crypto');
   const token = crypto.randomBytes(20).toString('hex');
   this.emailVerificationToken = crypto.createHash('sha256').update(token).digest('hex');
+  this.emailVerificationExpires = Date.now() + 24 * 60 * 60 * 1000;
   return token;
 };
 
@@ -145,10 +161,21 @@ userSchema.methods.updateStats = function(hours, peopleHelped) {
   return this.save();
 };
 
-// Index for better performance
-userSchema.index({ email: 1 });
-userSchema.index({ role: 1 });
-userSchema.index({ isActive: 1 });
+// ── Indexes ────────────────────────────────────────────────────────────────
+// email is declared unique above, Mongoose creates a unique index automatically.
+// Compound (role, isActive) — most common filter in admin user queries
+userSchema.index({ role: 1, isActive: 1 });
+// lastActive — used for daily-active-user stats and inactivity queries
+userSchema.index({ lastActive: -1 });
+// organizationVerificationStatus — admin verification queue
+userSchema.index({ organizationVerificationStatus: 1 });
+// Text index for admin search by name / email
+userSchema.index({ name: 'text', email: 'text' });
+// Sparse index on organizationName (only organizers have this field)
+userSchema.index({ organizationName: 1 }, { sparse: true });
+// createdAt — new-user-this-month analytics
+userSchema.index({ createdAt: -1 });
+// profile.city — geographically targeted emergency alerts
 userSchema.index({ 'profile.city': 1 });
 
 module.exports = mongoose.model('User', userSchema);

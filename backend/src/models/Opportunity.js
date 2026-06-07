@@ -14,7 +14,12 @@ const opportunitySchema = new mongoose.Schema({
   },
   category: {
     type: String,
-    enum: ['Environment', 'Education', 'Healthcare', 'Humanitarian', 'Social Services', 'Economic Development'],
+    enum: [
+      'Environment', 'Education', 'Healthcare', 'Humanitarian',
+      'Social Services', 'Economic Development',
+      'Arts & Culture', 'Sports & Recreation', 'Youth Development',
+      'Animal Welfare', 'Technology', 'Food & Nutrition'
+    ],
     required: true
   },
   location: {
@@ -58,7 +63,7 @@ const opportunitySchema = new mongoose.Schema({
   community: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Community',
-    required: true
+    required: false
   },
   volunteers: [{
     user: {
@@ -228,15 +233,20 @@ opportunitySchema.methods.addReview = function(userId, rating, comment) {
   return this.save();
 };
 
-// Indexes for better performance
+// ── Indexes ────────────────────────────────────────────────────────────────
 opportunitySchema.index({ title: 'text', description: 'text' });
-opportunitySchema.index({ category: 1 });
-opportunitySchema.index({ 'location.city': 1 });
-opportunitySchema.index({ 'dateTime.start': 1 });
-opportunitySchema.index({ status: 1 });
-opportunitySchema.index({ community: 1 });
-opportunitySchema.index({ createdBy: 1 });
-opportunitySchema.index({ isEmergency: 1 });
+// Most common listing query: status + sort
+opportunitySchema.index({ status: 1, 'dateTime.start': -1 });
+// Category browse filtered by status
+opportunitySchema.index({ status: 1, category: 1 });
+// City + status (location-based filtering)
+opportunitySchema.index({ 'location.city': 1, status: 1 });
+// Organizer's own opportunities
+opportunitySchema.index({ createdBy: 1, status: 1 });
+// Community feed
+opportunitySchema.index({ community: 1, status: 1 });
+// Emergency listings
+opportunitySchema.index({ isEmergency: 1, status: 1 });
 opportunitySchema.index({ tags: 1 });
 
 module.exports = mongoose.model('Opportunity', opportunitySchema);

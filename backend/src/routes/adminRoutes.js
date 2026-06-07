@@ -2,8 +2,10 @@ const express = require('express');
 const router = express.Router();
 const {
   getDashboardStats,
+  getSystemHealth,
   getUsers,
   updateUserStatus,
+  deleteUser,
   getReports,
   updateReport,
   getVerificationQueue,
@@ -33,10 +35,12 @@ router.use(authorize('admin'));
 router.get('/stats', getDashboardStats);
 router.get('/analytics', getAnalytics);
 router.get('/recent-activity', getRecentActivity);
+router.get('/system-health', getSystemHealth);
 
 // User management
 router.get('/users', getUsers);
 router.put('/users/:id/status', updateUserStatus);
+router.delete('/users/:id', deleteUser);
 
 // Reports
 router.get('/reports', getReports);

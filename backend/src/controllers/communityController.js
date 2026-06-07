@@ -1,5 +1,6 @@
 const Community = require('../models/Community');
 const User = require('../models/User');
+const { checkAndAwardBadges } = require('../utils/badgeSystem');
 
 // @desc    Create a community
 // @route   POST /api/communities
@@ -132,7 +133,8 @@ exports.joinCommunity = async (req, res) => {
     }
 
     await community.addMember(req.user.id);
-    res.json({ message: 'Successfully joined community' });
+    const newBadges = await checkAndAwardBadges(req.user.id);
+    res.json({ message: 'Successfully joined community', newBadges });
   } catch (error) {
     res.status(500).json({ message: 'Server error' });
   }
@@ -206,6 +208,39 @@ exports.deleteCommunity = async (req, res) => {
     await Community.findByIdAndDelete(req.params.id);
     res.json({ message: 'Community deleted successfully' });
   } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// @desc    Get recommended communities for authenticated volunteer
+// @route   GET /api/communities/recommended
+// @access  Private
+exports.getRecommended = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id || req.user.id).select('profile');
+    const interests = user?.profile?.interests || [];
+    const city = user?.profile?.city || '';
+
+    const communities = await Community.find({ isActive: true })
+      .populate('createdBy', 'name')
+      .lean();
+
+    const scored = communities.map(comm => {
+      let score = 0;
+      if (interests.includes(comm.category)) score += 3;
+      if (city && comm.location?.city?.toLowerCase() === city.toLowerCase()) score += 1;
+      return { ...comm, _score: score };
+    });
+
+    const limit = parseInt(req.query.limit) || 6;
+    const result = scored
+      .filter(c => c._score > 0 || !interests.length)
+      .sort((a, b) => b._score - a._score)
+      .slice(0, limit);
+
+    res.json(result);
+  } catch (error) {
+    console.error(error);
     res.status(500).json({ message: 'Server error' });
   }
 };

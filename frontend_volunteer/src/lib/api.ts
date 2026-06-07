@@ -20,8 +20,10 @@ const apiRequest = async (endpoint: string, options: RequestInit = {}) => {
     const response = await fetch(fullUrl, config);
     
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ message: 'Request failed' }));
-      throw new Error(error.message || 'API request failed');
+      const errorData = await response.json().catch(() => ({ message: 'Request failed' }));
+      const err: any = new Error(errorData.message || 'API request failed');
+      Object.assign(err, errorData);
+      throw err;
     }
     
     const data = await response.json();
@@ -100,6 +102,20 @@ export const authAPI = {
     return apiRequest(`/auth/verify-email/${token}`);
   },
 
+  resendVerification: async (email: string) => {
+    return apiRequest('/auth/resend-verification', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+  },
+
+  saveOnboarding: async (data: { purpose: string; interests: string[]; availability: Record<string, boolean> }) => {
+    return apiRequest('/auth/onboarding', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
   logout: () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
@@ -151,6 +167,11 @@ export const communityAPI = {
 
   getUserCommunities: async () => {
     return apiRequest('/communities/my-communities');
+  },
+
+  getRecommended: async (limit?: number) => {
+    const params = limit ? `?limit=${limit}` : '';
+    return apiRequest(`/communities/recommended${params}`);
   },
 };
 
@@ -237,6 +258,11 @@ export const opportunityAPI = {
     const params = limit ? `?limit=${limit}` : '';
     return apiRequest(`/opportunities/testimonials${params}`);
   },
+
+  getRecommended: async (limit?: number) => {
+    const params = limit ? `?limit=${limit}` : '';
+    return apiRequest(`/opportunities/recommended${params}`);
+  },
 };
 
 // Admin API
@@ -254,11 +280,15 @@ export const adminAPI = {
     return apiRequest(`/admin/users${queryParams ? `?${queryParams}` : ''}`);
   },
 
-  updateUserStatus: async (userId: string, status: { isActive?: boolean; isVerified?: boolean }) => {
+  updateUserStatus: async (userId: string, status: { isActive?: boolean; isVerified?: boolean; verificationStatus?: string }) => {
     return apiRequest(`/admin/users/${userId}/status`, {
       method: 'PUT',
       body: JSON.stringify(status),
     });
+  },
+
+  deleteUser: async (userId: string) => {
+    return apiRequest(`/admin/users/${userId}`, { method: 'DELETE' });
   },
 
   getReports: async (params?: { page?: number; limit?: number; status?: string; type?: string }) => {
@@ -300,6 +330,15 @@ export const adminAPI = {
     return apiRequest(`/admin/emergency-alerts/${alertId}/deactivate`, {
       method: 'PUT',
     });
+  },
+
+  getRecentActivity: async (params?: { limit?: number }) => {
+    const queryParams = params ? new URLSearchParams(params as any).toString() : '';
+    return apiRequest(`/admin/recent-activity${queryParams ? `?${queryParams}` : ''}`);
+  },
+
+  getSystemHealth: async () => {
+    return apiRequest('/admin/system-health');
   },
 };
 
@@ -401,16 +440,16 @@ export const certificateAPI = {
 
   downloadCertificate: async (certificateId: string) => {
     const token = localStorage.getItem('token');
-    const response = await fetch(`${API_BASE_URL}/certificates/${certificateId}/download`, {
+    const response = await fetch(`${API_BASE_URL}/certificates/download/${certificateId}`, {
       headers: {
         Authorization: `Bearer ${token}`,
       },
     });
-    
+
     if (!response.ok) {
       throw new Error('Failed to download certificate');
     }
-    
+
     const blob = await response.blob();
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -420,6 +459,38 @@ export const certificateAPI = {
     a.click();
     window.URL.revokeObjectURL(url);
     document.body.removeChild(a);
+  },
+
+  getMyPassport: async () => {
+    return apiRequest('/certificates/my-passport');
+  },
+
+  downloadMyPassport: async (recipientName: string, includePhoto = false) => {
+    const token = localStorage.getItem('token');
+    const qs = includePhoto ? '?includePhoto=true' : '';
+    const response = await fetch(`${API_BASE_URL}/certificates/my-passport/download${qs}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!response.ok) throw new Error('Failed to download passport');
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `UNITEE-Passport-${recipientName.replace(/\s+/g, '-')}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  },
+};
+
+// Volunteer hours logging
+export const volunteerAPI = {
+  logHours: async (opportunityId: string, hours: number) => {
+    return apiRequest(`/opportunities/${opportunityId}/log-hours`, {
+      method: 'POST',
+      body: JSON.stringify({ hours }),
+    });
   },
 };
 

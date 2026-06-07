@@ -1,140 +1,193 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/NewAuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { opportunityAPI, badgeAPI } from '@/lib/api';
-import CertificateManager from '@/components/certificates/CertificateManager';
+import { opportunityAPI, badgeAPI, certificateAPI } from '@/lib/api';
+import OnboardingModal from '@/components/onboarding/OnboardingModal';
 import {
   ClockIcon,
   TrophyIcon,
-  UsersIcon,
   CalendarIcon,
   AwardIcon,
-  DownloadIcon,
   ChevronRightIcon,
   CheckIcon,
   MapPinIcon,
-  ShieldCheckIcon
 } from '@/components/icons/Icons';
+import { Eye, Award, Shield, Download, ExternalLink } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import CertificatePreviewModal from '@/components/certificates/CertificatePreviewModal';
+
+const levelColors: Record<string, { bg: string; text: string; ring: string }> = {
+  platinum: { bg: 'bg-blue-100',   text: 'text-blue-700',   ring: 'ring-blue-300' },
+  gold:     { bg: 'bg-amber-100',  text: 'text-amber-700',  ring: 'ring-amber-300' },
+  silver:   { bg: 'bg-slate-100',  text: 'text-slate-600',  ring: 'ring-slate-300' },
+  bronze:   { bg: 'bg-orange-100', text: 'text-orange-700', ring: 'ring-orange-300' },
+};
+
+const computeLevel = (hours: number) => {
+  if (hours >= 100) return 'platinum';
+  if (hours >= 50)  return 'gold';
+  if (hours >= 20)  return 'silver';
+  return 'bronze';
+};
 
 const VolunteerDashboard: React.FC = () => {
-  const { user } = useAuth();
-  
-  // Try to get language context, but provide fallback if not available
-  let t = (key: string) => key; // Default fallback function
-  try {
-    const { t: translateFn } = useLanguage();
-    t = translateFn;
-  } catch (error) {
-    console.log('Language context not available, using fallback');
-  }
-  
-  const [activeTab, setActiveTab] = useState<'overview' | 'applications' | 'badges' | 'certificates'>('overview');
-  const [applications, setApplications] = useState<any[]>([]);
-  const [badges, setBadges] = useState<{ earned: any[], available: any[] }>({ earned: [], available: [] });
-  const [loading, setLoading] = useState(false);
-  const [badgesLoading, setBadgesLoading] = useState(false);
+  const { user, refreshUser } = useAuth();
+  const { t } = useLanguage();
+  const { toast } = useToast();
 
-  const impactStats = [
-    { label: t('impact.hours'), value: user?.stats?.totalHours || 0, icon: ClockIcon, color: 'bg-blue-500' },
-    { label: t('impact.events'), value: user?.stats?.totalEvents || 0, icon: CalendarIcon, color: 'bg-emerald-500' },
-    { label: t('impact.helped'), value: user?.stats?.peopleHelped || 0, icon: UsersIcon, color: 'bg-purple-500' },
-    { label: t('impact.badges'), value: user?.stats?.badges?.length || 0, icon: TrophyIcon, color: 'bg-amber-500' }
-  ];
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [activeTab, setActiveTab] = useState<'certificates' | 'activity' | 'badges'>('certificates');
+  const [applications, setApplications] = useState<any[]>([]);
+  const [badges, setBadges] = useState<any[]>([]);
+  const [orgCertificates, setOrgCertificates] = useState<any[]>([]);
+  const [loadingApps, setLoadingApps] = useState(false);
+  const [loadingBadges, setLoadingBadges] = useState(false);
+  const [loadingCerts, setLoadingCerts] = useState(false);
+  const [showPassportPreview, setShowPassportPreview] = useState(false);
+  const [previewCertId, setPreviewCertId] = useState<string | null>(null);
+
+  const hours   = user?.stats?.totalHours  ?? 0;
+  const events  = user?.stats?.totalEvents ?? 0;
+  const badgeCt = user?.stats?.badges?.length ?? 0;
+  const level   = computeLevel(hours);
+  const levelStyle = levelColors[level] ?? levelColors.bronze;
 
   useEffect(() => {
-    const loadApplications = async () => {
-      try {
-        setLoading(true);
-        const data = await opportunityAPI.getUserOpportunities('registered');
-        setApplications(data || []);
-      } catch (error) {
-        console.error('Failed to load applications:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    const loadBadges = async () => {
-      try {
-        setBadgesLoading(true);
-        const data = await badgeAPI.getMyBadges();
-        setBadges(data || { earned: [], available: [] });
-      } catch (error) {
-        console.error('Failed to load badges:', error);
-      } finally {
-        setBadgesLoading(false);
-      }
-    };
-
-    if (user) {
-      loadApplications();
-      loadBadges();
-    }
+    if (!user) return;
+    if ((user as any).onboardingCompleted === false) setShowOnboarding(true);
+    loadApplications();
+    loadBadges();
+    loadOrgCertificates();
   }, [user]);
+
+  const loadApplications = async () => {
+    try {
+      setLoadingApps(true);
+      const data = await opportunityAPI.getUserOpportunities('registered');
+      setApplications(Array.isArray(data) ? data : (data?.data ?? []));
+    } catch { /* silently fail */ } finally { setLoadingApps(false); }
+  };
+
+  const loadBadges = async () => {
+    try {
+      setLoadingBadges(true);
+      const data = await badgeAPI.getMyBadges().catch(() => ({ earned: [], available: [] }));
+      const earned: any[]    = data?.earned    ?? [];
+      const available: any[] = data?.available ?? [];
+      setBadges([
+        ...earned.map((b: any) => ({ ...b, earned: true })),
+        ...available.map((b: any) => ({ ...b, earned: false })),
+      ]);
+    } catch { setBadges([]); } finally { setLoadingBadges(false); }
+  };
+
+  const loadOrgCertificates = async () => {
+    if (!user?._id) return;
+    try {
+      setLoadingCerts(true);
+      const res = await certificateAPI.getUserCertificates(user._id);
+      const list: any[] = Array.isArray(res) ? res : (res?.data ?? []);
+      // Only show org-issued certificates, not passport snapshots
+      setOrgCertificates(list.filter((c: any) => c.type !== 'volunteer_passport'));
+    } catch { setOrgCertificates([]); } finally { setLoadingCerts(false); }
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'accepted': return 'bg-emerald-100 text-emerald-700';
-      case 'pending': return 'bg-amber-100 text-amber-700';
+      case 'accepted':  return 'bg-emerald-100 text-emerald-700';
+      case 'pending':   return 'bg-amber-100 text-amber-700';
       case 'completed': return 'bg-blue-100 text-blue-700';
-      case 'rejected': return 'bg-red-100 text-red-700';
-      default: return 'bg-gray-100 text-gray-700';
+      case 'rejected':  return 'bg-red-100 text-red-700';
+      default:          return 'bg-gray-100 text-gray-700';
     }
+  };
+
+  const normaliseApp = (app: any) => ({
+    id:           app._id ?? app.id,
+    title:        app.opportunity?.title ?? app.title ?? 'Opportunity',
+    organization: app.opportunity?.createdBy?.name ?? app.organization ?? '',
+    status:       app.applicationStatus ?? app.status ?? 'pending',
+    date:         app.opportunity?.dateTime?.start ?? app.dateTime?.start ?? app.date ?? '',
+    location:     app.opportunity?.location?.city
+                    ? `${app.opportunity.location.city}, ${app.opportunity.location.country ?? ''}`
+                    : app.location ?? '',
+  });
+
+  const certLevelColors: Record<string, string> = {
+    platinum: 'bg-blue-50 border-blue-200 text-blue-700',
+    gold:     'bg-amber-50 border-amber-200 text-amber-700',
+    silver:   'bg-slate-50 border-slate-200 text-slate-600',
+    bronze:   'bg-orange-50 border-orange-200 text-orange-700',
   };
 
   return (
     <div className="py-8">
-      {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-center gap-4 mb-4">
-          <img
-            src={user?.avatar_url || `https://ui-avatars.com/api/?name=${user?.full_name}&background=3b82f6&color=fff&size=128`}
-            alt={user?.full_name}
-            className="w-20 h-20 rounded-2xl object-cover"
-          />
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">{user?.full_name}</h1>
-            <p className="text-gray-500">{user?.city || 'Cameroon'} • Volunteer since Dec 2025</p>
-            {user?.is_verified && (
-              <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-medium rounded-full">
-                <CheckIcon size={12} />
-                Verified Volunteer
+      <OnboardingModal
+        open={showOnboarding}
+        onComplete={() => { setShowOnboarding(false); refreshUser(); }}
+      />
+
+      {/* ── PROFILE HEADER ─────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5 mb-8">
+        <img
+          src={user?.profile?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name ?? 'V')}&background=3b82f6&color=fff&size=128`}
+          alt={user?.name}
+          className="w-20 h-20 rounded-2xl object-cover flex-shrink-0"
+        />
+        <div className="flex-1 min-w-0">
+          <div className="flex flex-wrap items-center gap-2 mb-1">
+            <h1 className="text-2xl font-bold text-gray-900">{user?.name}</h1>
+            {user?.isVerified && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-medium rounded-full">
+                <CheckIcon size={11} /> Verified
               </span>
             )}
+            <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 text-xs font-bold rounded-full ring-1 ${levelStyle.bg} ${levelStyle.text} ${levelStyle.ring}`}>
+              {level.charAt(0).toUpperCase() + level.slice(1)} Level
+            </span>
+          </div>
+          <p className="text-gray-500 text-sm mb-3">{user?.profile?.city ?? 'Cameroon'} • Volunteer</p>
+          {/* Compact stats strip */}
+          <div className="flex flex-wrap gap-4 text-sm">
+            <span className="flex items-center gap-1.5 text-gray-600">
+              <ClockIcon size={15} className="text-blue-500" />
+              <strong>{hours}</strong> hours
+            </span>
+            <span className="flex items-center gap-1.5 text-gray-600">
+              <CalendarIcon size={15} className="text-emerald-500" />
+              <strong>{events}</strong> events
+            </span>
+            <span className="flex items-center gap-1.5 text-gray-600">
+              <TrophyIcon size={15} className="text-amber-500" />
+              <strong>{badgeCt}</strong> badges
+            </span>
           </div>
         </div>
+
+        {/* Passport button in header */}
+        <button
+          onClick={() => setShowPassportPreview(true)}
+          className="flex-shrink-0 flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-xl transition-colors shadow-sm"
+        >
+          <Eye size={16} />
+          View Passport
+        </button>
       </div>
 
-      {/* Impact Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        {impactStats.map((stat, index) => (
-          <div key={index} className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-            <div className={`w-12 h-12 ${stat.color} rounded-xl flex items-center justify-center mb-4`}>
-              <stat.icon size={24} className="text-white" />
-            </div>
-            <p className="text-3xl font-bold text-gray-900 mb-1">{stat.value}</p>
-            <p className="text-gray-500 text-sm">{stat.label}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* Tabs */}
+      {/* ── TABS ─────────────────────────────────────────────────── */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="border-b border-gray-100">
           <div className="flex">
             {[
-              { id: 'overview', label: 'Overview' },
-              { id: 'applications', label: 'My Applications' },
-              { id: 'badges', label: t('impact.badges') },
-              { id: 'certificates', label: 'Certificates' }
-            ].map((tab) => (
+              { id: 'certificates', label: 'Certificates' },
+              { id: 'activity',     label: 'Activity' },
+              { id: 'badges',       label: t('impact.badges') },
+            ].map(tab => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as any)}
                 className={`flex-1 py-4 text-sm font-medium transition-colors relative ${
-                  activeTab === tab.id
-                    ? 'text-blue-600'
-                    : 'text-gray-500 hover:text-gray-700'
+                  activeTab === tab.id ? 'text-blue-600' : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
                 {tab.label}
@@ -147,168 +200,178 @@ const VolunteerDashboard: React.FC = () => {
         </div>
 
         <div className="p-6">
-          {activeTab === 'overview' && (
-            <div className="space-y-6">
-              {/* Volunteer Passport */}
-              <div className="bg-gradient-to-br from-blue-600 to-blue-700 rounded-2xl p-6 text-white">
-                <div className="flex items-start justify-between mb-4">
-                  <div>
-                    <h3 className="text-lg font-semibold mb-1">{t('impact.passport')}</h3>
-                    <p className="text-blue-100 text-sm">Your digital volunteer identity</p>
-                  </div>
-                  <AwardIcon size={32} className="text-blue-200" />
-                </div>
-                <div className="grid grid-cols-3 gap-4 mb-4">
-                  <div>
-                    <p className="text-blue-200 text-xs">Total Hours</p>
-                    <p className="text-2xl font-bold">{user?.stats?.totalHours || 0}</p>
-                  </div>
-                  <div>
-                    <p className="text-blue-200 text-xs">Events</p>
-                    <p className="text-2xl font-bold">{user?.stats?.totalEvents || 0}</p>
-                  </div>
-                  <div>
-                    <p className="text-blue-200 text-xs">Badges</p>
-                    <p className="text-2xl font-bold">{user?.stats?.badges?.length || 0}</p>
-                  </div>
-                </div>
-                <button className="w-full py-3 bg-white/20 hover:bg-white/30 rounded-xl font-medium transition-colors flex items-center justify-center gap-2">
-                  <DownloadIcon size={18} />
-                  {t('impact.certificate')}
-                </button>
-              </div>
 
-              {/* Recent Activity */}
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Activity</h3>
-                <div className="space-y-3">
-                  {applications.slice(0, 3).map((app) => (
-                    <div key={app.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
-                      <div>
-                        <p className="font-medium text-gray-900">{app.title}</p>
-                        <p className="text-sm text-gray-500">{app.organization}</p>
-                      </div>
-                      <span className={`px-3 py-1 text-xs font-medium rounded-full ${getStatusColor(app.status)}`}>
-                        {app.status}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'applications' && (
-            <div className="space-y-4">
-              {applications.map((app) => (
-                <div key={app.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-1">
-                      <p className="font-semibold text-gray-900">{app.title}</p>
-                      <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${getStatusColor(app.status)}`}>
-                        {app.status}
-                      </span>
-                    </div>
-                    <p className="text-sm text-gray-500 mb-2">{app.organization}</p>
-                    <div className="flex items-center gap-4 text-xs text-gray-400">
-                      <span className="flex items-center gap-1">
-                        <CalendarIcon size={12} />
-                        {app.date}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <MapPinIcon size={12} />
-                        {app.location}
-                      </span>
-                    </div>
-                  </div>
-                  <ChevronRightIcon size={20} className="text-gray-400" />
-                </div>
-              ))}
-            </div>
-          )}
-
-          {activeTab === 'badges' && (
+          {/* ── CERTIFICATES TAB ──────────────────────────────────── */}
+          {activeTab === 'certificates' && (
             <div>
-              {badgesLoading ? (
+              {loadingCerts ? (
+                <p className="text-sm text-gray-400 text-center py-10">Loading certificates…</p>
+              ) : orgCertificates.length === 0 ? (
                 <div className="text-center py-12">
-                  <p className="text-gray-600">Loading badges...</p>
+                  <Award size={48} className="mx-auto text-gray-200 mb-3" />
+                  <p className="font-medium text-gray-600 mb-1">No certificates yet</p>
+                  <p className="text-sm text-gray-400">
+                    When you complete volunteer events, organisations can issue you certificates here.
+                  </p>
                 </div>
               ) : (
-                <>
-                  {/* Earned Badges */}
-                  {badges.earned.length > 0 && (
-                    <div className="mb-8">
-                      <h3 className="text-lg font-semibold text-gray-900 mb-4">Earned Badges ({badges.earned.length})</h3>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        {badges.earned.map((badge: any) => (
-                          <div
-                            key={badge._id}
-                            className="p-4 rounded-xl text-center bg-gradient-to-br from-amber-50 to-orange-50 border-2 border-amber-200"
-                          >
-                            <div className="text-4xl mb-2">{badge.icon}</div>
-                            <p className="font-semibold text-gray-900 text-sm mb-1">{badge.name}</p>
-                            <p className="text-xs text-gray-500 mb-2">{badge.description}</p>
-                            <div className="flex justify-center gap-1 mb-2">
-                              <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-xs rounded-full">{badge.tier}</span>
-                              <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full">{badge.points} pts</span>
-                            </div>
-                            <p className="text-xs text-amber-600 font-medium">
-                              {badge.earnedAt ? new Date(badge.earnedAt).toLocaleDateString() : 'Earned'}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {orgCertificates.map((cert: any) => {
+                    const certLevel = cert.achievementLevel ?? 'bronze';
+                    const cls = certLevelColors[certLevel] ?? certLevelColors.bronze;
+                    return (
+                      <div key={cert._id ?? cert.certificateId}
+                        className={`rounded-xl border-2 p-4 ${cls.split(' ').slice(0, 2).join(' ')} bg-white`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-gray-900 truncate">{cert.title}</p>
+                            <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1">
+                              <Shield size={11} />
+                              {cert.issuerName ?? cert.issuerId?.name ?? 'Organisation'}
                             </p>
+                            {cert.opportunityTitle && (
+                              <p className="text-xs text-gray-400 mt-0.5 truncate">{cert.opportunityTitle}</p>
+                            )}
                           </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Available Badges */}
-                  {badges.available.length > 0 && (
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-900 mb-4">Available Badges ({badges.available.length})</h3>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        {badges.available.map((badge: any) => (
-                          <div
-                            key={badge._id}
-                            className="p-4 rounded-xl text-center bg-gray-50 border-2 border-gray-100 opacity-60 hover:opacity-100 transition-opacity"
-                          >
-                            <div className="text-4xl mb-2 grayscale">{badge.icon}</div>
-                            <p className="font-semibold text-gray-900 text-sm mb-1">{badge.name}</p>
-                            <p className="text-xs text-gray-500 mb-2">{badge.description}</p>
-                            <div className="flex justify-center gap-1 mb-3">
-                              <span className="px-2 py-0.5 bg-gray-200 text-gray-600 text-xs rounded-full">{badge.tier}</span>
-                              <span className="px-2 py-0.5 bg-gray-200 text-gray-600 text-xs rounded-full">{badge.points} pts</span>
-                            </div>
-                            <div className="mt-2">
-                              <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                                <div
-                                  className="h-full bg-blue-500 rounded-full transition-all"
-                                  style={{ width: `${badge.progress || 0}%` }}
-                                />
-                              </div>
-                              <p className="text-xs text-gray-400 mt-1">{badge.progress || 0}% complete</p>
-                            </div>
+                          <span className={`flex-shrink-0 px-2 py-0.5 text-[11px] font-bold uppercase rounded-full border ${cls}`}>
+                            {certLevel}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
+                          <span className="text-xs text-gray-400">
+                            {cert.issuedDate ? new Date(cert.issuedDate).toLocaleDateString() : '—'}
+                          </span>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => setPreviewCertId(cert.certificateId)}
+                              className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium"
+                            >
+                              <Eye size={13} /> View
+                            </button>
+                            <button
+                              onClick={() => certificateAPI.downloadCertificate(cert.certificateId)
+                                .catch(() => toast({ title: 'Download failed', variant: 'destructive' }))}
+                              className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 font-medium"
+                            >
+                              <Download size={13} /> PDF
+                            </button>
                           </div>
-                        ))}
+                        </div>
                       </div>
-                    </div>
-                  )}
-
-                  {badges.earned.length === 0 && badges.available.length === 0 && (
-                    <div className="text-center py-12">
-                      <TrophyIcon size={48} className="mx-auto text-gray-300 mb-4" />
-                      <p className="text-gray-600">No badges available yet</p>
-                    </div>
-                  )}
-                </>
+                    );
+                  })}
+                </div>
               )}
             </div>
           )}
 
-          {activeTab === 'certificates' && (
-            <CertificateManager />
+          {/* ── ACTIVITY TAB ──────────────────────────────────────── */}
+          {activeTab === 'activity' && (
+            <div className="space-y-3">
+              {loadingApps ? (
+                <p className="text-sm text-gray-400">Loading…</p>
+              ) : applications.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-8">No activity yet. Sign up for an opportunity to get started.</p>
+              ) : (
+                applications.map(raw => {
+                  const app = normaliseApp(raw);
+                  return (
+                    <div key={app.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <p className="font-semibold text-gray-900 truncate">{app.title}</p>
+                          <span className={`flex-shrink-0 px-2 py-0.5 text-xs font-medium rounded-full ${getStatusColor(app.status)}`}>
+                            {app.status}
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-500 mb-1">{app.organization}</p>
+                        <div className="flex items-center gap-4 text-xs text-gray-400">
+                          {app.date && (
+                            <span className="flex items-center gap-1">
+                              <CalendarIcon size={11} />
+                              {new Date(app.date).toLocaleDateString()}
+                            </span>
+                          )}
+                          {app.location && (
+                            <span className="flex items-center gap-1">
+                              <MapPinIcon size={11} />
+                              {app.location}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <ChevronRightIcon size={18} className="text-gray-400 flex-shrink-0" />
+                    </div>
+                  );
+                })
+              )}
+            </div>
           )}
+
+          {/* ── BADGES TAB ────────────────────────────────────────── */}
+          {activeTab === 'badges' && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {loadingBadges ? (
+                <p className="col-span-4 text-sm text-gray-400 text-center py-8">Loading badges…</p>
+              ) : badges.length === 0 ? (
+                <p className="col-span-4 text-sm text-gray-400 text-center py-8">No badges available yet.</p>
+              ) : (
+                badges.map((badge: any) => (
+                  <div
+                    key={badge._id}
+                    className={`p-4 rounded-xl text-center transition-all ${
+                      badge.earned
+                        ? 'bg-gradient-to-br from-amber-50 to-orange-50 border-2 border-amber-200'
+                        : 'bg-gray-50 border-2 border-gray-100'
+                    }`}
+                  >
+                    <div className={`text-4xl mb-2 ${badge.earned ? '' : 'opacity-40 grayscale'}`}>{badge.icon}</div>
+                    <p className="font-semibold text-gray-900 text-sm mb-1">{badge.name}</p>
+                    <p className="text-xs text-gray-500 mb-2">{badge.description}</p>
+                    {badge.earned ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-100 text-amber-700 text-xs font-semibold rounded-full">
+                        ✓ {badge.earnedAt ? new Date(badge.earnedAt).toLocaleDateString() : 'Earned'}
+                      </span>
+                    ) : (
+                      <div className="mt-2">
+                        <div className="flex justify-between text-xs text-gray-400 mb-1">
+                          <span>{badge.current ?? 0}</span>
+                          <span>{badge.criteria?.threshold ?? '?'}</span>
+                        </div>
+                        <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-blue-500 rounded-full transition-all duration-500"
+                            style={{ width: `${badge.progress ?? 0}%` }}
+                          />
+                        </div>
+                        <p className="text-xs text-gray-400 mt-1">{badge.progress ?? 0}% complete</p>
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+
         </div>
       </div>
+
+      {/* ── MODALS ───────────────────────────────────────────────── */}
+      {showPassportPreview && user && (
+        <CertificatePreviewModal
+          userId={user._id}
+          passportMode={true}
+          onClose={() => setShowPassportPreview(false)}
+        />
+      )}
+      {previewCertId && user && (
+        <CertificatePreviewModal
+          userId={user._id}
+          certificateId={previewCertId}
+          onClose={() => setPreviewCertId(null)}
+        />
+      )}
     </div>
   );
 };
