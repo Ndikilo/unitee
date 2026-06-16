@@ -16,13 +16,16 @@ import {
   XCircle,
   AlertCircle,
   Award,
-  Eye
+  Download,
+  ExternalLink,
+  Star,
+  ListOrdered,
 } from 'lucide-react';
-import { opportunityAPI, volunteerAPI } from '@/lib/api';
+import { opportunityAPI, volunteerAPI, certificateAPI } from '@/lib/api';
+import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/contexts/NewAuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
-import CertificatePreviewModal from '@/components/certificates/CertificatePreviewModal';
 import BackButton from '@/components/ui/BackButton';
 
 interface Opportunity {
@@ -51,7 +54,12 @@ interface Opportunity {
   };
   status: string;
   applicationStatus?: 'pending' | 'accepted' | 'rejected';
+  volunteerStatus?: 'registered' | 'confirmed' | 'attended' | 'waitlisted';
   hoursLogged?: number;
+  hasReviewed?: boolean;
+  hasCertificate?: boolean;
+  certificateId?: string;
+  verificationUrl?: string;
   createdAt: string;
 }
 
@@ -67,7 +75,11 @@ const MyOpportunities: React.FC = () => {
   const [selectedOpportunity, setSelectedOpportunity] = useState<Opportunity | null>(null);
   const [hoursToLog, setHoursToLog] = useState('');
   const [loggingHours, setLoggingHours] = useState(false);
-  const [certPreviewOppId, setCertPreviewOppId] = useState<string | null>(null);
+  const [showReviewDialog, setShowReviewDialog] = useState(false);
+  const [reviewOpp, setReviewOpp] = useState<Opportunity | null>(null);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState('');
+  const [submittingReview, setSubmittingReview] = useState(false);
 
   useEffect(() => {
     fetchOpportunities();
@@ -132,16 +144,28 @@ const MyOpportunities: React.FC = () => {
 
   const submitHours = async () => {
     if (!selectedOpportunity || !hoursToLog) return;
+    const parsed = parseFloat(hoursToLog);
+    if (isNaN(parsed) || parsed <= 0) {
+      toast({ title: 'Invalid hours', description: 'Please enter a number greater than 0', variant: 'destructive' });
+      return;
+    }
+    const maxAllowed = selectedOpportunity.dateTime.duration
+      ? selectedOpportunity.dateTime.duration * 2
+      : 24;
+    if (parsed > maxAllowed) {
+      toast({ title: 'Hours too high', description: `Maximum allowed is ${maxAllowed} hours for this opportunity`, variant: 'destructive' });
+      return;
+    }
     try {
       setLoggingHours(true);
-      const res = await volunteerAPI.logHours(selectedOpportunity._id, parseFloat(hoursToLog));
+      const res = await volunteerAPI.logHours(selectedOpportunity._id, parsed);
       const newBadges: any[] = res?.newBadges ?? [];
       if (newBadges.length > 0) {
         newBadges.forEach((badge: any) => {
           toast({ title: `${badge.icon ?? '🏆'} Badge Earned!`, description: `You earned the "${badge.name}" badge — ${badge.description}` });
         });
       }
-      toast({ title: 'Hours Logged', description: `Successfully logged ${hoursToLog} hours` });
+      toast({ title: 'Hours Saved', description: `${parsed} hours recorded for this activity` });
       setShowHoursDialog(false);
       setHoursToLog('');
       fetchOpportunities();
@@ -152,8 +176,42 @@ const MyOpportunities: React.FC = () => {
     }
   };
 
-  const handleViewCertificate = (opportunityId: string) => {
-    setCertPreviewOppId(opportunityId);
+  const [downloadingCertId, setDownloadingCertId] = useState<string | null>(null);
+
+  const handleDownloadCertificate = async (opportunityId: string, recipientName: string) => {
+    setDownloadingCertId(opportunityId);
+    try {
+      await certificateAPI.downloadCompletionCertificate(opportunityId, recipientName);
+      toast({ title: 'Certificate downloaded', description: 'Check your Downloads folder.' });
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Download failed', variant: 'destructive' });
+    } finally {
+      setDownloadingCertId(null);
+    }
+  };
+
+  const handleOpenReview = (opportunity: Opportunity) => {
+    setReviewOpp(opportunity);
+    setReviewRating(5);
+    setReviewComment('');
+    setShowReviewDialog(true);
+  };
+
+  const submitReview = async () => {
+    if (!reviewOpp) return;
+    setSubmittingReview(true);
+    try {
+      await opportunityAPI.addReview(reviewOpp._id, reviewRating, reviewComment);
+      toast({ title: 'Review submitted', description: 'Thank you for your feedback!' });
+      setShowReviewDialog(false);
+      setRegisteredOpportunities(prev =>
+        prev.map(o => o._id === reviewOpp._id ? { ...o, hasReviewed: true } : o)
+      );
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to submit review', variant: 'destructive' });
+    } finally {
+      setSubmittingReview(false);
+    }
   };
 
   const formatDate = (dateString: string) => {
@@ -197,10 +255,15 @@ const MyOpportunities: React.FC = () => {
         <CardHeader className="pb-3">
           <div className="flex justify-between items-start">
             <div className="flex-1">
-              <div className="flex items-center gap-2 mb-2">
+              <div className="flex items-center gap-2 mb-2 flex-wrap">
                 <Badge variant="secondary">{opportunity.category}</Badge>
                 {opportunity.applicationStatus && getStatusBadge(opportunity.applicationStatus)}
-                {past && <Badge variant="outline">Completed</Badge>}
+                {opportunity.volunteerStatus === 'waitlisted' && (
+                  <Badge variant="outline" className="border-amber-400 text-amber-600">
+                    <ListOrdered className="h-3 w-3 mr-1" />Waitlisted
+                  </Badge>
+                )}
+                {past && opportunity.volunteerStatus !== 'waitlisted' && <Badge variant="outline">Past</Badge>}
               </div>
               <CardTitle className="text-lg">{opportunity.title}</CardTitle>
               <CardDescription className="line-clamp-2 mt-1">
@@ -256,36 +319,81 @@ const MyOpportunities: React.FC = () => {
               </Button>
             )}
             
-            {past && opportunity.applicationStatus === 'accepted' && (
+            {past && opportunity.applicationStatus === 'accepted' && opportunity.volunteerStatus !== 'waitlisted' && (
               <div className="space-y-2">
-                <div className="flex items-center justify-center gap-2 text-sm text-green-600 bg-green-50 py-2 rounded">
-                  <Award className="h-4 w-4" />
-                  <span>Completed - Certificate Available</span>
-                </div>
-                {opportunity.hoursLogged ? (
-                  <div className="text-center text-sm text-gray-600">
-                    Hours logged: {opportunity.hoursLogged}
+                {/* Attended status + hours */}
+                {opportunity.volunteerStatus === 'attended' ? (
+                  <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-xl px-3 py-2">
+                    <CheckCircle className="h-4 w-4 text-green-600 shrink-0" />
+                    <span className="text-sm font-medium text-green-700">
+                      You attended
+                      {opportunity.hoursLogged ? ` · ${opportunity.hoursLogged}h logged` : ''}
+                    </span>
+                    {opportunity.hoursLogged ? (
+                      <Button variant="ghost" size="sm" className="ml-auto h-6 text-xs text-gray-400 px-2" onClick={() => handleLogHours(opportunity)}>
+                        Edit
+                      </Button>
+                    ) : null}
                   </div>
                 ) : (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full"
-                    onClick={() => handleLogHours(opportunity)}
-                  >
-                    <Clock className="h-4 w-4 mr-2" />
-                    Log Hours
+                  // Not yet marked attended by organizer — show self-log option
+                  opportunity.hoursLogged ? (
+                    <div className="flex items-center gap-2 text-sm text-gray-600 bg-gray-50 rounded-xl px-3 py-2">
+                      <Clock className="h-4 w-4 shrink-0" />{opportunity.hoursLogged}h self-reported
+                      <Button variant="ghost" size="sm" className="ml-auto h-6 text-xs text-gray-400 px-2" onClick={() => handleLogHours(opportunity)}>Update</Button>
+                    </div>
+                  ) : (
+                    <Button variant="outline" size="sm" className="w-full" onClick={() => handleLogHours(opportunity)}>
+                      <Clock className="h-4 w-4 mr-2" />Log My Hours
+                    </Button>
+                  )
+                )}
+
+                {/* Certificate — most prominent action when available */}
+                {opportunity.hasCertificate ? (
+                  <div className="rounded-xl border border-orange-200 bg-orange-50 p-3 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Award className="h-4 w-4 text-orange-600 shrink-0" />
+                      <span className="text-sm font-semibold text-orange-700">Certificate ready</span>
+                    </div>
+                    {opportunity.certificateId && (
+                      <p className="text-xs text-gray-500 font-mono">{opportunity.certificateId}</p>
+                    )}
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        className="flex-1 bg-orange-500 hover:bg-orange-600 text-white"
+                        onClick={() => handleDownloadCertificate(opportunity._id, user?.name || '')}
+                        disabled={downloadingCertId === opportunity._id}
+                      >
+                        {downloadingCertId === opportunity._id
+                          ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          : <><Download className="h-3.5 w-3.5 mr-1.5" />Download</>
+                        }
+                      </Button>
+                      {opportunity.verificationUrl && (
+                        <Button
+                          size="sm" variant="outline"
+                          className="border-orange-200 text-orange-600 hover:bg-orange-50"
+                          onClick={() => window.open(opportunity.verificationUrl, '_blank')}
+                        >
+                          <ExternalLink className="h-3.5 w-3.5 mr-1.5" />Verify
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ) : opportunity.volunteerStatus === 'attended' ? (
+                  <div className="text-xs text-gray-400 text-center py-1">
+                    Certificate pending — the organiser hasn't issued it yet
+                  </div>
+                ) : null}
+
+                {/* Review */}
+                {!opportunity.hasReviewed && (
+                  <Button variant="outline" size="sm" className="w-full text-amber-600 border-amber-200 hover:bg-amber-50" onClick={() => handleOpenReview(opportunity)}>
+                    <Star className="h-4 w-4 mr-2" />Leave a Review
                   </Button>
                 )}
-                <Button
-                  variant="default"
-                  size="sm"
-                  className="w-full bg-blue-600 hover:bg-blue-700"
-                  onClick={() => handleViewCertificate(opportunity._id)}
-                >
-                  <Eye className="h-4 w-4 mr-2" />
-                  View Certificate
-                </Button>
               </div>
             )}
           </div>
@@ -409,33 +517,89 @@ const MyOpportunities: React.FC = () => {
         )}
       </Tabs>
 
-      {/* Certificate Preview Modal */}
-      {certPreviewOppId && user && (
-        <CertificatePreviewModal
-          userId={user._id}
-          opportunityId={certPreviewOppId}
-          onClose={() => setCertPreviewOppId(null)}
-        />
-      )}
+      {/* Leave a Review Dialog */}
+      <Dialog open={showReviewDialog} onOpenChange={(open) => { if (!open) { setShowReviewDialog(false); setReviewOpp(null); setReviewRating(5); setReviewComment(''); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Leave a Review</DialogTitle>
+            <DialogDescription>
+              Share your experience volunteering for <strong>{reviewOpp?.title}</strong>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-4">
+            <div>
+              <p className="text-sm font-medium mb-2">Rating</p>
+              <div className="flex gap-1">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <button
+                    key={star}
+                    type="button"
+                    onClick={() => setReviewRating(star)}
+                    className="focus:outline-none"
+                  >
+                    <Star
+                      className={`h-7 w-7 transition-colors ${star <= reviewRating ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`}
+                    />
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <p className="text-sm font-medium mb-2">Comment (optional)</p>
+              <Textarea
+                placeholder="Describe your experience..."
+                value={reviewComment}
+                onChange={(e) => setReviewComment(e.target.value)}
+                rows={4}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setShowReviewDialog(false); setReviewOpp(null); setReviewRating(5); setReviewComment(''); }}>
+              Cancel
+            </Button>
+            <Button onClick={submitReview} disabled={submittingReview}>
+              {submittingReview ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Submitting...
+                </>
+              ) : (
+                'Submit Review'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Log Hours Dialog */}
       <Dialog open={showHoursDialog} onOpenChange={setShowHoursDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Log Volunteer Hours</DialogTitle>
+            <DialogTitle>{selectedOpportunity?.hoursLogged ? 'Update Hours' : 'Log Volunteer Hours'}</DialogTitle>
             <DialogDescription>
-              Enter the number of hours you volunteered for {selectedOpportunity?.title}
+              How many hours did you actually volunteer for <strong>{selectedOpportunity?.title}</strong>?
+              {selectedOpportunity?.dateTime.duration && (
+                <span className="block mt-1 text-xs text-gray-500">
+                  Planned duration: {selectedOpportunity.dateTime.duration} hrs — enter your actual time.
+                </span>
+              )}
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
             <Input
               type="number"
-              placeholder="Hours (e.g., 4.5)"
+              placeholder="e.g. 3.5"
               value={hoursToLog}
               onChange={(e) => setHoursToLog(e.target.value)}
-              min="0"
+              min="0.5"
+              max={selectedOpportunity?.dateTime.duration ? selectedOpportunity.dateTime.duration * 2 : 24}
               step="0.5"
+              autoFocus
             />
+            <p className="text-xs text-gray-400 mt-2">
+              Max: {selectedOpportunity?.dateTime.duration ? selectedOpportunity.dateTime.duration * 2 : 24} hrs
+            </p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowHoursDialog(false)}>

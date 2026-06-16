@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/NewAuthContext';
 import Logo from '@/components/Logo';
 import {
@@ -13,15 +13,21 @@ const OrganizerHeader: React.FC = () => {
   const navigate = useNavigate();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showMobile, setShowMobile] = useState(false);
+  const [searchParams] = useSearchParams();
+  const activeTab = searchParams.get('tab') || 'applications';
 
   const navLinks = [
-    { label: 'Dashboard', href: '/organizer-dashboard', icon: LayoutDashboard },
-    { label: 'Applications', href: '/organizer-dashboard', icon: Users },
+    { label: 'Applications', href: '/organizer-dashboard?tab=applications', icon: Users },
+    { label: 'Opportunities', href: '/organizer-dashboard?tab=opportunities', icon: LayoutDashboard },
     { label: 'Profile', href: '/profile', icon: Building },
     { label: 'Notifications', href: '/notifications', icon: Bell },
   ];
 
-  const isActive = (href: string) => location.pathname === href;
+  const isActive = (href: string) => {
+    const tabMatch = href.match(/\?tab=(.+)/);
+    if (tabMatch) return location.pathname === '/organizer-dashboard' && activeTab === tabMatch[1];
+    return location.pathname === href;
+  };
 
   const handleLogout = () => {
     logout();
@@ -59,7 +65,7 @@ const OrganizerHeader: React.FC = () => {
           {/* Right */}
           <div className="flex items-center gap-2">
             {/* Quick create button */}
-            <Link to="/organizer-dashboard"
+            <Link to="/organizer-dashboard?tab=opportunities"
               className="hidden sm:flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors">
               <PlusCircle size={15} />
               New Opportunity
@@ -141,7 +147,7 @@ const OrganizerHeader: React.FC = () => {
               <link.icon size={18} />{link.label}
             </Link>
           ))}
-          <Link to="/organizer-dashboard"
+          <Link to="/organizer-dashboard?tab=opportunities"
             onClick={() => setShowMobile(false)}
             className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium bg-blue-600 text-white">
             <PlusCircle size={18} />New Opportunity

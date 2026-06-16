@@ -119,6 +119,7 @@ app.use('/api/certificates', require('./routes/certificateRoutes'));
 app.use('/api/admin/certificate-templates', require('./routes/certTemplateRoutes'));
 app.use('/api/badges', require('./routes/badgeRoutes'));
 app.use('/api/setup', require('./routes/setupRoutes'));
+app.use('/api/feedback', require('./routes/feedbackRoutes'));
 
 // 404 handler
 app.use('*', (req, res) => {

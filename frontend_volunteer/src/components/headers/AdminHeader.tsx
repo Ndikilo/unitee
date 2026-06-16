@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/NewAuthContext';
 import Logo from '@/components/Logo';
 import {
@@ -14,17 +14,23 @@ const AdminHeader: React.FC = () => {
   const navigate = useNavigate();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showMobile, setShowMobile] = useState(false);
+  const [searchParams] = useSearchParams();
+  const activeTab = searchParams.get('tab') || 'overview';
 
   const navLinks = [
-    { label: 'Overview', href: '/admin-dashboard', icon: LayoutDashboard },
-    { label: 'Users', href: '/admin-dashboard', icon: Users },
-    { label: 'Opportunities', href: '/admin-dashboard', icon: Briefcase },
-    { label: 'Reports', href: '/admin-dashboard', icon: Flag },
-    { label: 'Badges', href: '/admin-dashboard', icon: Award },
-    { label: 'Alerts', href: '/admin-dashboard', icon: AlertTriangle },
+    { label: 'Overview', href: '/admin-dashboard?tab=overview', icon: LayoutDashboard },
+    { label: 'Users', href: '/admin-dashboard?tab=users', icon: Users },
+    { label: 'Opportunities', href: '/admin-dashboard?tab=opportunities', icon: Briefcase },
+    { label: 'Reports', href: '/admin-dashboard?tab=reports', icon: Flag },
+    { label: 'Badges', href: '/admin-dashboard?tab=badges', icon: Award },
+    { label: 'Alerts', href: '/admin-dashboard?tab=settings', icon: AlertTriangle },
   ];
 
-  const isActive = (href: string) => location.pathname === href;
+  const isActive = (href: string) => {
+    const tabMatch = href.match(/\?tab=(.+)/);
+    if (tabMatch) return activeTab === tabMatch[1];
+    return location.pathname === href;
+  };
 
   const handleLogout = () => {
     logout();

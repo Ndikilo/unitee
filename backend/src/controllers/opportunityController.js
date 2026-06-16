@@ -1,6 +1,8 @@
 const Opportunity = require('../models/Opportunity');
 const Community = require('../models/Community');
 const User = require('../models/User');
+const Application = require('../models/Application');
+const Certificate = require('../models/Certificate');
 const { checkAndAwardBadges } = require('../utils/badgeSystem');
 
 // @desc    Create an opportunity
@@ -250,25 +252,94 @@ exports.cancelSignup = async (req, res) => {
 exports.getUserOpportunities = async (req, res) => {
   try {
     const { type = 'registered' } = req.query;
-    
-    let query = {};
-    
+    const userId = (req.user._id || req.user.id).toString();
+
+    // Created opportunities (organizer view) — no enrichment needed
     if (type === 'created') {
-      query.createdBy = req.user._id;
-    } else {
-      query.$or = [
-        { 'volunteers.user': req.user._id },
-        { 'waitlist.user': req.user._id }
-      ];
+      const created = await Opportunity.find({ createdBy: userId })
+        .populate('community', 'name')
+        .populate('createdBy', 'name organizationName')
+        .sort({ 'dateTime.start': 1 });
+      return res.json({ data: created });
     }
-    
-    const opportunities = await Opportunity.find(query)
+
+    // Fetch all applications for this user
+    const applications = await Application.find({ volunteer: userId }).lean();
+    const applicationOppIds = applications.map(a => a.opportunity.toString());
+    const appByOppId = {};
+    applications.forEach(a => { appByOppId[a.opportunity.toString()] = a; });
+
+    // Find opportunities where the user is registered, waitlisted, or has applied
+    const opportunities = await Opportunity.find({
+      $or: [
+        { 'volunteers.user': userId },
+        { 'waitlist.user': userId },
+        { _id: { $in: applicationOppIds } },
+      ],
+    })
       .populate('community', 'name')
       .populate('createdBy', 'name organizationName')
-      .sort({ 'dateTime.start': 1 });
-    
-    res.json(opportunities);
+      .sort({ 'dateTime.start': 1 })
+      .lean();
+
+    // Enrich each opportunity with user-specific computed fields
+    const baseEnriched = opportunities.map(opp => {
+      const oppIdStr = opp._id.toString();
+      const volEntry = opp.volunteers?.find(v => v.user?.toString() === userId);
+      const onWaitlist = opp.waitlist?.some(w => w.user?.toString() === userId);
+      const app = appByOppId[oppIdStr];
+
+      const volunteerStatus = volEntry ? volEntry.status
+        : onWaitlist ? 'waitlisted'
+        : null;
+
+      const applicationStatus = app ? app.status
+        : volEntry ? 'accepted'
+        : null;
+
+      const hasReviewed = opp.feedback?.reviews?.some(r => r.user?.toString() === userId) ?? false;
+
+      return {
+        ...opp,
+        volunteerStatus,
+        applicationStatus,
+        hoursLogged: volEntry?.hoursLogged ?? 0,
+        hasReviewed,
+        // cert fields resolved below
+        hasCertificate: false,
+        certificateId: null,
+        verificationUrl: null,
+      };
+    });
+
+    // Check the Certificate collection once (bulk) for all attended events.
+    // This is the ground truth — status flags alone are not reliable.
+    const attendedOppIds = baseEnriched
+      .filter(o => ['attended', 'confirmed'].includes(o.volunteerStatus ?? ''))
+      .map(o => o._id);
+
+    const issuedCerts = attendedOppIds.length > 0
+      ? await Certificate.find({
+          recipientId: userId,
+          opportunityId: { $in: attendedOppIds },
+          type: 'volunteer_completion',
+          status: 'active',
+        }).select('opportunityId certificateId verificationUrl').lean()
+      : [];
+
+    const certByOppId = {};
+    issuedCerts.forEach(c => { certByOppId[c.opportunityId.toString()] = c; });
+
+    const enriched = baseEnriched.map(o => {
+      const cert = certByOppId[o._id.toString()];
+      return cert
+        ? { ...o, hasCertificate: true, certificateId: cert.certificateId, verificationUrl: cert.verificationUrl }
+        : o;
+    });
+
+    res.json({ data: enriched });
   } catch (error) {
+    console.error('getUserOpportunities error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -369,16 +440,31 @@ exports.logHours = async (req, res) => {
     if (!hours || isNaN(parseFloat(hours)) || parseFloat(hours) <= 0) {
       return res.status(400).json({ message: 'Valid hours value is required' });
     }
+    const parsedHours = parseFloat(hours);
     const opportunity = await Opportunity.findById(req.params.id);
     if (!opportunity) {
       return res.status(404).json({ message: 'Opportunity not found' });
     }
-    const userId = req.user._id || req.user.id;
-    await User.findByIdAndUpdate(userId, {
-      $inc: { 'stats.totalHours': parseFloat(hours), 'stats.totalEvents': 1 },
-    });
+    const userId = (req.user._id || req.user.id).toString();
+
+    // Persist hours on the volunteer subdocument for per-opportunity tracking
+    const volEntry = opportunity.volunteers.find(v => v.user.toString() === userId);
+    if (volEntry) {
+      const previousHours = volEntry.hoursLogged || 0;
+      volEntry.hoursLogged = parsedHours;
+      await opportunity.save();
+
+      // Adjust global stats: subtract previous hours, add new hours
+      const hoursDiff = parsedHours - previousHours;
+      if (hoursDiff !== 0) {
+        await User.findByIdAndUpdate(userId, {
+          $inc: { 'stats.totalHours': hoursDiff },
+        });
+      }
+    }
+
     const newBadges = await checkAndAwardBadges(userId);
-    res.json({ message: 'Hours logged successfully', hours: parseFloat(hours), newBadges });
+    res.json({ message: 'Hours logged successfully', hours: parsedHours, newBadges });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error' });

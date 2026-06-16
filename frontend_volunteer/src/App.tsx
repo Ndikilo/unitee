@@ -8,6 +8,8 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { AuthProvider } from "@/contexts/NewAuthContext";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import ErrorBoundary from "@/components/ErrorBoundary";
+import SplashScreen from "@/components/SplashScreen";
+import { useState } from "react";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
@@ -29,6 +31,9 @@ import MyOpportunities from "./pages/MyOpportunities";
 import Communities from "./pages/Communities";
 import CommunityDetail from "./pages/CommunityDetail";
 import CertificateVerify from "./pages/CertificateVerify";
+import OpportunityDetail from "./pages/OpportunityDetail";
+import ProtectedRoute from "./components/ProtectedRoute";
+import FeedbackWidget from "./components/FeedbackWidget";
 import TermsVolunteer from "./pages/TermsVolunteer";
 import TermsOrganization from "./pages/TermsOrganization";
 import PrivacyVolunteer from "./pages/PrivacyVolunteer";
@@ -47,8 +52,12 @@ const queryClient = new QueryClient({
   },
 });
 
-const App = () => (
+const App = () => {
+  const [splashDone, setSplashDone] = useState(false);
+
+  return (
   <ErrorBoundary>
+    {!splashDone && <SplashScreen onDone={() => setSplashDone(true)} />}
     <ThemeProvider defaultTheme="light">
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
@@ -57,6 +66,7 @@ const App = () => (
           <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
             <LanguageProvider>
               <AuthProvider>
+                <FeedbackWidget />
                 <Routes>
                   <Route path="/" element={<Index />} />
                   <Route path="/login" element={<Login />} />
@@ -66,20 +76,21 @@ const App = () => (
                   <Route path="/reset-password/:token" element={<ResetPassword />} />
                   <Route path="/verify-email/:token" element={<EmailVerification />} />
                   <Route path="/opportunities" element={<Opportunities />} />
-                  <Route path="/my-opportunities" element={<MyOpportunities />} />
+                  <Route path="/opportunity/:id" element={<OpportunityDetail />} />
+                  <Route path="/my-opportunities" element={<ProtectedRoute><MyOpportunities /></ProtectedRoute>} />
                   <Route path="/communities" element={<Communities />} />
                   <Route path="/community/:id" element={<CommunityDetail />} />
                   <Route path="/terms-volunteer" element={<TermsVolunteer />} />
                   <Route path="/terms-organization" element={<TermsOrganization />} />
                   <Route path="/privacy-volunteer" element={<PrivacyVolunteer />} />
                   <Route path="/privacy-organization" element={<PrivacyOrganization />} />
-                  <Route path="/profile" element={<Profile />} />
-                  <Route path="/settings" element={<Settings />} />
-                  <Route path="/notifications" element={<Notifications />} />
-                  <Route path="/dashboard" element={<RoleBasedDashboard />} />
-                  <Route path="/volunteer-dashboard" element={<Dashboard />} />
-                  <Route path="/organizer-dashboard" element={<OrganizerDashboardEnhanced />} />
-                  <Route path="/admin-dashboard" element={<AdminDashboard />} />
+                  <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+                  <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+                  <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
+                  <Route path="/dashboard" element={<ProtectedRoute><RoleBasedDashboard /></ProtectedRoute>} />
+                  <Route path="/volunteer-dashboard" element={<ProtectedRoute requiredRole="volunteer"><Dashboard /></ProtectedRoute>} />
+                  <Route path="/organizer-dashboard" element={<ProtectedRoute requiredRole="organization"><OrganizerDashboardEnhanced /></ProtectedRoute>} />
+                  <Route path="/admin-dashboard" element={<ProtectedRoute requiredRole="admin"><AdminDashboard /></ProtectedRoute>} />
                   <Route path="/verify" element={<CertificateVerify />} />
                   <Route path="/verify/:id" element={<CertificateVerify />} />
                   <Route path="/auth/success" element={<AuthSuccess />} />
@@ -92,6 +103,7 @@ const App = () => (
       </QueryClientProvider>
     </ThemeProvider>
   </ErrorBoundary>
-);
+  );
+};
 
 export default App;

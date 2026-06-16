@@ -116,6 +116,10 @@ export const authAPI = {
     });
   },
 
+  deleteAccount: async () => {
+    return apiRequest('/auth/account', { method: 'DELETE' });
+  },
+
   logout: () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
@@ -382,6 +386,73 @@ export const organizerAPI = {
   getProfile: async () => {
     return apiRequest('/organizer/profile');
   },
+
+  getOpportunityVolunteers: async (opportunityId: string) => {
+    return apiRequest(`/organizer/opportunities/${opportunityId}/volunteers`);
+  },
+
+  markVolunteerAttended: async (opportunityId: string, userId: string, status: string = 'attended', hours?: number) => {
+    return apiRequest(`/organizer/opportunities/${opportunityId}/volunteers/${userId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status, ...(hours !== undefined ? { hours } : {}) }),
+    });
+  },
+
+  bulkMarkAttended: async (opportunityId: string, attendances: { userId: string; status: string; hours: number }[]) => {
+    return apiRequest(`/organizer/opportunities/${opportunityId}/bulk-attendance`, {
+      method: 'POST',
+      body: JSON.stringify({ attendances }),
+    });
+  },
+
+  bulkIssueCertificates: async (opportunityId: string) => {
+    return apiRequest(`/organizer/opportunities/${opportunityId}/issue-certificates`, {
+      method: 'POST',
+    });
+  },
+
+  getImpactReport: async (params?: { startDate?: string; endDate?: string; format?: string }) => {
+    const queryParams = new URLSearchParams(params as any).toString();
+    return apiRequest(`/organizer/impact-report${queryParams ? `?${queryParams}` : ''}`);
+  },
+
+  downloadImpactCsv: async (params?: { startDate?: string; endDate?: string }) => {
+    const token = localStorage.getItem('token');
+    const base = (import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:5000/api';
+    const q = new URLSearchParams({ ...params, format: 'csv' } as any).toString();
+    const response = await fetch(`${base}/organizer/impact-report?${q}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!response.ok) throw new Error('Failed to download report');
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `unitee-impact-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  },
+
+  downloadImpactPdf: async (params?: { startDate?: string; endDate?: string }) => {
+    const token = localStorage.getItem('token');
+    const base = (import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:5000/api';
+    const q = params ? new URLSearchParams(params as any).toString() : '';
+    const response = await fetch(`${base}/organizer/impact-report/pdf${q ? `?${q}` : ''}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!response.ok) throw new Error('Failed to download PDF report');
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `unitee-impact-${new Date().toISOString().slice(0, 10)}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  },
 };
 
 // Report API
@@ -463,6 +534,32 @@ export const certificateAPI = {
 
   getMyPassport: async () => {
     return apiRequest('/certificates/my-passport');
+  },
+
+  previewCompletion: async (opportunityId: string) => {
+    return apiRequest(`/certificates/preview-completion/${opportunityId}`);
+  },
+
+  downloadCompletionCertificate: async (opportunityId: string, recipientName: string) => {
+    const token = localStorage.getItem('token');
+    const response = await fetch(`${API_BASE_URL}/certificates/download-completion/${opportunityId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!response.ok) throw new Error('Failed to download certificate');
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `UNITEE-Certificate-${recipientName.replace(/\s+/g, '-')}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  },
+
+  getAllCertificates: async (params?: { search?: string; date?: string; type?: string; page?: number; limit?: number }) => {
+    const qs = params ? '?' + new URLSearchParams(params as any).toString() : '';
+    return apiRequest(`/certificates/all${qs}`);
   },
 
   downloadMyPassport: async (recipientName: string, includePhoto = false) => {
@@ -576,6 +673,28 @@ export const setupAPI = {
   // Public — no auth required, safe to call on home page
   getPublicStats: async () => {
     return apiRequest('/setup/public-stats');
+  },
+};
+
+export const feedbackAPI = {
+  submit: async (data: { type: string; message: string; email?: string; page?: string }, isAuthenticated: boolean) => {
+    const endpoint = isAuthenticated ? '/feedback' : '/feedback/anonymous';
+    return apiRequest(endpoint, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  getAll: async (params?: { status?: string; type?: string; page?: number }) => {
+    const queryParams = new URLSearchParams(params as any).toString();
+    return apiRequest(`/feedback${queryParams ? `?${queryParams}` : ''}`);
+  },
+
+  updateStatus: async (id: string, status: 'read' | 'resolved') => {
+    return apiRequest(`/feedback/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    });
   },
 };
 

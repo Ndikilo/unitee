@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Switch } from '@/components/ui/switch';
-import { Eye, EyeOff, Loader2, CheckCircle, Lock, Bell, Shield, Trash2, LogOut, Globe } from 'lucide-react';
+import { Eye, EyeOff, Loader2, CheckCircle, Lock, Bell, Shield, Trash2, LogOut, Globe, Palette } from 'lucide-react';
 import { authAPI } from '@/lib/api';
 import { useAuth } from '@/contexts/NewAuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -13,7 +13,7 @@ import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '@/components/DashboardLayout';
 import BackButton from '@/components/ui/BackButton';
 
-type Tab = 'security' | 'notifications' | 'privacy' | 'account';
+type Tab = 'security' | 'notifications' | 'privacy' | 'account' | 'branding';
 
 const Settings: React.FC = () => {
   const { toast } = useToast();
@@ -43,8 +43,34 @@ const Settings: React.FC = () => {
     badgeAlerts: true,
   });
 
+  // ── Privacy ───────────────────────────────────────────────────────────────
+  const [privacyLoading, setPrivacyLoading] = useState(false);
+  const [privacyPrefs, setPrivacyPrefs] = useState({
+    showProfileToOrgs: true,
+    showHoursPublicly: true,
+    showBadgesPublicly: true,
+    allowCertVerification: true,
+  });
+
   // ── Language ──────────────────────────────────────────────────────────────
   const [language, setLanguage] = useState(user?.preferences?.language || 'en');
+
+  // ── Branding (org only) ───────────────────────────────────────────────────
+  const isOrg = (user as any)?.userType === 'organization' || user?.role === 'organizer';
+  const [brandColor, setBrandColor] = useState((user as any)?.organizationBrandColor || '#f97316');
+  const [brandLoading, setBrandLoading] = useState(false);
+
+  const handleSaveBranding = async () => {
+    setBrandLoading(true);
+    try {
+      await authAPI.updateProfile({ organizationBrandColor: brandColor });
+      toast({ title: 'Brand color saved', description: 'Your PDFs and certificates will now use this colour.' });
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to save', variant: 'destructive' });
+    } finally {
+      setBrandLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (user?.preferences) {
@@ -53,8 +79,19 @@ const Settings: React.FC = () => {
         emailNotifications: user.preferences?.emailNotifications ?? true,
         smsNotifications: user.preferences?.smsNotifications ?? false,
         emergencyAlerts: user.preferences?.emergencyAlerts ?? true,
+        opportunityUpdates: user.preferences?.opportunityUpdates ?? true,
+        communityUpdates: user.preferences?.communityUpdates ?? true,
+        badgeAlerts: user.preferences?.badgeAlerts ?? true,
       }));
       setLanguage(user.preferences?.language || 'en');
+      if (user.preferences?.privacy) {
+        setPrivacyPrefs({
+          showProfileToOrgs: user.preferences.privacy.showProfileToOrgs ?? true,
+          showHoursPublicly: user.preferences.privacy.showHoursPublicly ?? true,
+          showBadgesPublicly: user.preferences.privacy.showBadgesPublicly ?? true,
+          allowCertVerification: user.preferences.privacy.allowCertVerification ?? true,
+        });
+      }
     }
   }, [user]);
 
@@ -99,9 +136,33 @@ const Settings: React.FC = () => {
     }
   };
 
-  const handleDeleteAccount = () => {
-    if (window.confirm('Are you sure you want to delete your account? This cannot be undone.')) {
-      toast({ title: 'Request sent', description: 'Account deletion request submitted. Contact support@unitee.org to confirm.' });
+  const handleSavePrivacy = async () => {
+    setPrivacyLoading(true);
+    try {
+      await authAPI.updateProfile({ preferences: { privacy: privacyPrefs } });
+      if (refreshUser) await refreshUser();
+      toast({ title: 'Privacy settings saved', description: 'Your privacy preferences have been updated.' });
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to save privacy settings', variant: 'destructive' });
+    } finally {
+      setPrivacyLoading(false);
+    }
+  };
+
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
+  const handleDeleteAccount = async () => {
+    if (!window.confirm('Are you sure you want to permanently delete your account? All your data will be removed. This cannot be undone.')) return;
+    setDeleteLoading(true);
+    try {
+      await authAPI.deleteAccount();
+      logout();
+      navigate('/');
+      toast({ title: 'Account deleted', description: 'Your account has been permanently deleted.' });
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to delete account. Please try again.', variant: 'destructive' });
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -109,6 +170,7 @@ const Settings: React.FC = () => {
     { id: 'security', label: 'Security', icon: Lock },
     { id: 'notifications', label: 'Notifications', icon: Bell },
     { id: 'privacy', label: 'Privacy', icon: Shield },
+    ...(isOrg ? [{ id: 'branding' as Tab, label: 'Branding', icon: Palette }] : []),
     { id: 'account', label: 'Account', icon: Trash2 },
   ];
 
@@ -142,7 +204,14 @@ const Settings: React.FC = () => {
               <CardDescription>Update your password to keep your account secure</CardDescription>
             </CardHeader>
             <CardContent>
-              {pwSuccess ? (
+              {user?.googleId ? (
+                <Alert className="border-blue-200 bg-blue-50">
+                  <CheckCircle className="h-4 w-4 text-blue-600" />
+                  <AlertDescription className="text-blue-700">
+                    Your account uses Google Sign-In. Password management is handled by Google — you cannot set a separate password here.
+                  </AlertDescription>
+                </Alert>
+              ) : pwSuccess ? (
                 <Alert className="border-green-200 bg-green-50">
                   <CheckCircle className="h-4 w-4 text-green-600" />
                   <AlertDescription className="text-green-700">Password changed successfully!</AlertDescription>
@@ -277,34 +346,125 @@ const Settings: React.FC = () => {
 
         {/* ── PRIVACY TAB ──────────────────────────────────────────────────── */}
         {activeTab === 'privacy' && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2"><Shield size={18} /> Privacy Settings</CardTitle>
-              <CardDescription>Control what information is visible to others</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-5">
-              {[
-                { label: 'Show profile to organizations', desc: 'Organizations can view your profile when you apply' },
-                { label: 'Show volunteer hours publicly', desc: 'Your total hours are visible on your public profile' },
-                { label: 'Show badges publicly', desc: 'Your earned badges are visible to other users' },
-                { label: 'Allow certificate verification', desc: 'Others can verify your certificates using the certificate ID' },
-              ].map((item, i) => (
-                <div key={i} className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">{item.label}</p>
-                    <p className="text-xs text-gray-500">{item.desc}</p>
+          <div className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2"><Shield size={18} /> Privacy Settings</CardTitle>
+                <CardDescription>Control what information is visible to others</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                {([
+                  { key: 'showProfileToOrgs', label: 'Show profile to organizations', desc: 'Organizations can view your profile when you apply' },
+                  { key: 'showHoursPublicly', label: 'Show volunteer hours publicly', desc: 'Your total hours are visible on your public profile' },
+                  { key: 'showBadgesPublicly', label: 'Show badges publicly', desc: 'Your earned badges are visible to other users' },
+                  { key: 'allowCertVerification', label: 'Allow certificate verification', desc: 'Others can verify your certificates using the certificate ID' },
+                ] as { key: keyof typeof privacyPrefs; label: string; desc: string }[]).map((item) => (
+                  <div key={item.key} className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">{item.label}</p>
+                      <p className="text-xs text-gray-500">{item.desc}</p>
+                    </div>
+                    <Switch
+                      checked={privacyPrefs[item.key]}
+                      onCheckedChange={val => setPrivacyPrefs(p => ({ ...p, [item.key]: val }))}
+                    />
                   </div>
-                  <Switch defaultChecked />
+                ))}
+                <div className="pt-2 border-t border-gray-100">
+                  <p className="text-xs text-gray-500">
+                    For full privacy details, see our{' '}
+                    <a href="/privacy-volunteer" target="_blank" className="text-blue-600 underline">Privacy Policy</a>.
+                  </p>
                 </div>
-              ))}
-              <div className="pt-2 border-t border-gray-100">
-                <p className="text-xs text-gray-500">
-                  For full privacy details, see our{' '}
-                  <a href="/privacy-volunteer" target="_blank" className="text-blue-600 underline">Privacy Policy</a>.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+            <Button onClick={handleSavePrivacy} disabled={privacyLoading} className="w-full">
+              {privacyLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving...</> : 'Save Privacy Settings'}
+            </Button>
+          </div>
+        )}
+
+        {/* ── BRANDING TAB (org only) ──────────────────────────────────────── */}
+        {activeTab === 'branding' && isOrg && (
+          <div className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Palette className="h-5 w-5 text-orange-500" />
+                  Organisation Brand Colour
+                </CardTitle>
+                <CardDescription>
+                  This colour is applied to your impact report PDF and all certificates you issue. Set it to match your organisation's brand — so the report reads as yours, not UNITEE's.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                <div className="flex items-center gap-4">
+                  {/* Native colour picker */}
+                  <input
+                    type="color"
+                    value={brandColor}
+                    onChange={e => setBrandColor(e.target.value)}
+                    className="h-12 w-16 rounded-lg border border-gray-200 cursor-pointer p-0.5"
+                    title="Pick your brand colour"
+                  />
+                  {/* Hex input */}
+                  <div className="flex-1 space-y-1">
+                    <Label className="text-xs text-gray-500">Hex code</Label>
+                    <Input
+                      value={brandColor}
+                      onChange={e => {
+                        const v = e.target.value;
+                        if (/^#[0-9a-fA-F]{0,6}$/.test(v)) setBrandColor(v);
+                      }}
+                      placeholder="#f97316"
+                      className="font-mono"
+                    />
+                  </div>
+                  {/* Live preview swatch */}
+                  <div className="shrink-0 text-center">
+                    <div
+                      className="h-12 w-24 rounded-xl border border-gray-200 shadow-inner"
+                      style={{ backgroundColor: brandColor }}
+                    />
+                    <p className="text-xs text-gray-400 mt-1">Preview</p>
+                  </div>
+                </div>
+
+                {/* Preset colours */}
+                <div>
+                  <p className="text-xs text-gray-500 mb-2">Common presets</p>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { name: 'UNITEE Orange', hex: '#f97316' },
+                      { name: 'MTN Yellow',    hex: '#ffd100' },
+                      { name: 'Orange Tel',    hex: '#ff6600' },
+                      { name: 'Green',         hex: '#16a34a' },
+                      { name: 'Blue',          hex: '#2563eb' },
+                      { name: 'Purple',        hex: '#7c3aed' },
+                      { name: 'Red',           hex: '#dc2626' },
+                      { name: 'Slate',         hex: '#475569' },
+                    ].map(({ name, hex }) => (
+                      <button
+                        key={hex}
+                        title={name}
+                        onClick={() => setBrandColor(hex)}
+                        className={`h-8 w-8 rounded-lg border-2 transition-transform hover:scale-110 ${brandColor === hex ? 'border-gray-800 scale-110' : 'border-transparent'}`}
+                        style={{ backgroundColor: hex }}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-xl bg-amber-50 border border-amber-100 px-4 py-3 text-xs text-amber-700">
+                  This colour affects <strong>new</strong> PDFs and certificates generated after saving. Existing downloaded files are not changed.
+                </div>
+
+                <Button onClick={handleSaveBranding} disabled={brandLoading}>
+                  {brandLoading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</> : 'Save Brand Colour'}
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
         )}
 
         {/* ── ACCOUNT TAB ──────────────────────────────────────────────────── */}
@@ -351,8 +511,8 @@ const Settings: React.FC = () => {
                 <CardDescription>Permanently delete your account and all associated data. This cannot be undone.</CardDescription>
               </CardHeader>
               <CardContent>
-                <Button variant="destructive" onClick={handleDeleteAccount}>
-                  Request Account Deletion
+                <Button variant="destructive" onClick={handleDeleteAccount} disabled={deleteLoading}>
+                  {deleteLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Deleting...</> : 'Delete My Account'}
                 </Button>
               </CardContent>
             </Card>

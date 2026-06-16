@@ -73,6 +73,7 @@ const userSchema = new mongoose.Schema({
   organizationRegion: String,
   organizationLogo: String,
   organizationBanner: String,
+  organizationBrandColor: { type: String, default: '#f97316' },
   organizationVerificationStatus: {
     type: String,
     enum: ['pending', 'verified', 'rejected'],
@@ -93,7 +94,16 @@ const userSchema = new mongoose.Schema({
     emailNotifications: { type: Boolean, default: true },
     smsNotifications: { type: Boolean, default: false },
     emergencyAlerts: { type: Boolean, default: true },
-    language: { type: String, default: 'en' }
+    opportunityUpdates: { type: Boolean, default: true },
+    communityUpdates: { type: Boolean, default: true },
+    badgeAlerts: { type: Boolean, default: true },
+    language: { type: String, default: 'en' },
+    privacy: {
+      showProfileToOrgs: { type: Boolean, default: true },
+      showHoursPublicly: { type: Boolean, default: true },
+      showBadgesPublicly: { type: Boolean, default: true },
+      allowCertVerification: { type: Boolean, default: true },
+    },
   },
   lastActive: { type: Date, default: Date.now },
   isActive: { type: Boolean, default: true },

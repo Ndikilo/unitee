@@ -16,9 +16,183 @@ import {
   RefreshCw, Trash2, Search, FileText, Award, Bell, MapPin, Eye, Settings as SettingsIcon,
   Plus, Edit, X, ShieldCheck
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
-import { adminAPI, opportunityAPI, communityAPI, badgeAPI } from '@/lib/api';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { adminAPI, opportunityAPI, communityAPI, badgeAPI, certificateAPI } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
+
+// ─── Admin Certificates Tab ────────────────────────────────────────────────────
+const CERT_TYPES: Record<string, string> = {
+  volunteer_completion: 'Completion',
+  volunteer_passport: 'Passport',
+  achievement_badge: 'Badge',
+  hours_milestone: 'Hours',
+  skill_certification: 'Skill',
+};
+
+const CertificatesAdminTab: React.FC = () => {
+  const { toast } = useToast();
+  const navigate = useNavigate();
+  const [certs, setCerts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [search, setSearch] = useState('');
+  const [dateFilter, setDateFilter] = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+
+  const fetchCerts = async (p = page) => {
+    try {
+      setLoading(true);
+      const params: any = { page: p, limit: 15 };
+      if (search.trim()) params.search = search.trim();
+      if (dateFilter) params.date = dateFilter;
+      if (typeFilter) params.type = typeFilter;
+      const res = await certificateAPI.getAllCertificates(params);
+      setCerts(res?.data ?? []);
+      setTotalPages(res?.totalPages ?? 1);
+      setTotal(res?.total ?? 0);
+      setPage(p);
+    } catch {
+      toast({ title: 'Error', description: 'Failed to load certificates', variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchCerts(1); }, []);
+
+  const handleSearch = () => fetchCerts(1);
+  const handleClear = () => { setSearch(''); setDateFilter(''); setTypeFilter(''); setTimeout(() => fetchCerts(1), 0); };
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Certificate Registry</CardTitle>
+              <p className="text-sm text-gray-500 mt-0.5">{total} certificate{total !== 1 ? 's' : ''} in the system</p>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => fetchCerts(1)} disabled={loading}>
+              <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${loading ? 'animate-spin' : ''}`} />Refresh
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Filters */}
+          <div className="flex flex-wrap gap-3">
+            <div className="relative flex-1 min-w-[200px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input
+                className="pl-9"
+                placeholder="Search by cert ID, recipient, or event…"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleSearch()}
+              />
+            </div>
+            <Input
+              type="date"
+              className="w-44"
+              value={dateFilter}
+              onChange={e => setDateFilter(e.target.value)}
+              title="Filter by issue date"
+            />
+            <select
+              value={typeFilter}
+              onChange={e => setTypeFilter(e.target.value)}
+              className="h-10 px-3 border border-input rounded-md text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring w-40"
+            >
+              <option value="">All types</option>
+              {Object.entries(CERT_TYPES).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+            <Button onClick={handleSearch} disabled={loading}>
+              <Search className="h-4 w-4 mr-1.5" />Search
+            </Button>
+            {(search || dateFilter || typeFilter) && (
+              <Button variant="ghost" onClick={handleClear}>Clear</Button>
+            )}
+          </div>
+
+          {/* Table */}
+          {loading ? (
+            <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-blue-500" /></div>
+          ) : certs.length === 0 ? (
+            <div className="text-center py-12">
+              <Award className="h-14 w-14 mx-auto text-gray-200 mb-3" />
+              <p className="text-gray-500">No certificates found</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left text-xs text-gray-500 uppercase tracking-wide">
+                    <th className="pb-2 pr-4">Certificate ID</th>
+                    <th className="pb-2 pr-4">Recipient</th>
+                    <th className="pb-2 pr-4">Type</th>
+                    <th className="pb-2 pr-4">Event / Title</th>
+                    <th className="pb-2 pr-4">Issued</th>
+                    <th className="pb-2 pr-4">Status</th>
+                    <th className="pb-2">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {certs.map(cert => (
+                    <tr key={cert._id} className="hover:bg-gray-50 transition-colors">
+                      <td className="py-3 pr-4">
+                        <span className="font-mono text-xs text-blue-700 bg-blue-50 px-2 py-0.5 rounded">{cert.certificateId}</span>
+                      </td>
+                      <td className="py-3 pr-4">
+                        <p className="font-medium">{cert.recipientName}</p>
+                        <p className="text-xs text-gray-400">{cert.recipientEmail}</p>
+                      </td>
+                      <td className="py-3 pr-4">
+                        <Badge variant="secondary" className="text-xs">{CERT_TYPES[cert.type] ?? cert.type}</Badge>
+                      </td>
+                      <td className="py-3 pr-4 max-w-[200px]">
+                        <p className="truncate text-gray-700">{cert.opportunityTitle ?? cert.title}</p>
+                      </td>
+                      <td className="py-3 pr-4 text-gray-500 whitespace-nowrap">
+                        {new Date(cert.issuedDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      </td>
+                      <td className="py-3 pr-4">
+                        <Badge variant={cert.status === 'active' ? 'default' : cert.status === 'revoked' ? 'destructive' : 'secondary'} className="text-xs">
+                          {cert.status}
+                        </Badge>
+                      </td>
+                      <td className="py-3">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs gap-1"
+                          onClick={() => navigate(`/verify/${cert.certificateId}`)}
+                        >
+                          <Eye className="h-3 w-3" />Verify
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between pt-2 border-t">
+              <p className="text-xs text-gray-500">Page {page} of {totalPages}</p>
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" onClick={() => fetchCerts(page - 1)} disabled={page <= 1 || loading}>Previous</Button>
+                <Button size="sm" variant="outline" onClick={() => fetchCerts(page + 1)} disabled={page >= totalPages || loading}>Next</Button>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
 
 const AdminDashboard: React.FC = () => {
   const { toast } = useToast();
@@ -40,7 +214,8 @@ const AdminDashboard: React.FC = () => {
     'Disaster Relief', 'Youth Programs', 'Elderly Care', 'Animal Welfare'
   ]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('overview');
+  const [searchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'overview');
   const [searchTerm, setSearchTerm] = useState('');
   
   // Filters
@@ -576,11 +751,7 @@ const AdminDashboard: React.FC = () => {
 
         {/* Certificates Tab */}
         <TabsContent value="certificates">
-          <Card>
-            <CardHeader><CardTitle>Certificate Management</CardTitle></CardHeader>
-            <CardContent>{certificates.length === 0 ? (<div className="text-center py-12"><Award className="h-16 w-16 mx-auto text-gray-300 mb-4" /><p className="text-gray-600">No certificates issued</p></div>) : (<div className="space-y-2">{certificates.map(cert => (<div key={cert._id} className="flex justify-between p-4 border rounded"><div><h3 className="font-semibold">{cert.volunteer?.name}</h3><p className="text-sm text-gray-600">{cert.opportunity?.title}</p><p className="text-xs text-gray-500">{cert.hours} hours • Issued {new Date(cert.issuedAt).toLocaleDateString()}</p></div><Button size="sm" variant="outline">View</Button></div>))}</div>)}</CardContent>
-          </Card>
-
+          <CertificatesAdminTab />
         </TabsContent>
 
         {/* Certificate Templates Tab */}
