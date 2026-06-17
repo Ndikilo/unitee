@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/NewAuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { ChevronRightIcon, UsersIcon, ClockIcon, BuildingIcon, GlobeIcon } from '@/components/icons/Icons';
 import { usePublicStats } from '@/hooks/useApi';
 
@@ -18,6 +19,7 @@ interface HeroSectionProps {
 
 const HeroSection: React.FC<HeroSectionProps> = ({ onGetStarted, onRegisterNGO, onStartVolunteering }) => {
   const { isAuthenticated } = useAuth();
+  const { t } = useLanguage();
   const [activeImage, setActiveImage] = useState(0);
   const { data: statsData } = usePublicStats();
   const stats = {
@@ -33,10 +35,10 @@ const HeroSection: React.FC<HeroSectionProps> = ({ onGetStarted, onRegisterNGO, 
   }, []);
 
   const statsDisplay = [
-    { icon: UsersIcon, value: stats.volunteers > 0 ? `${stats.volunteers.toLocaleString()}+` : '—', label: 'Volunteers', color: 'text-orange-400' },
-    { icon: ClockIcon, value: stats.hours > 0 ? `${stats.hours.toLocaleString()}+` : '—', label: 'Hours Given', color: 'text-green-400' },
-    { icon: BuildingIcon, value: stats.organizations > 0 ? `${stats.organizations.toLocaleString()}+` : '—', label: 'Organizations', color: 'text-blue-400' },
-    { icon: GlobeIcon, value: stats.communities > 0 ? `${stats.communities.toLocaleString()}+` : '—', label: 'Communities', color: 'text-orange-300' },
+    { icon: UsersIcon, value: stats.volunteers > 0 ? `${stats.volunteers.toLocaleString()}+` : '—', label: t('stats.volunteers'), color: 'text-orange-400' },
+    { icon: ClockIcon, value: stats.hours > 0 ? `${stats.hours.toLocaleString()}+` : '—', label: t('stats.hoursGiven'), color: 'text-green-400' },
+    { icon: BuildingIcon, value: stats.organizations > 0 ? `${stats.organizations.toLocaleString()}+` : '—', label: t('stats.orgs'), color: 'text-blue-400' },
+    { icon: GlobeIcon, value: stats.communities > 0 ? `${stats.communities.toLocaleString()}+` : '—', label: t('stats.communities'), color: 'text-orange-300' },
   ];
 
   return (
@@ -72,18 +74,18 @@ const HeroSection: React.FC<HeroSectionProps> = ({ onGetStarted, onRegisterNGO, 
           {/* Pill badge */}
           <div className="inline-flex items-center gap-2 px-4 py-2 bg-orange-500/20 backdrop-blur-sm rounded-full border border-orange-400/30 mb-8">
             <span className="w-2 h-2 bg-orange-400 rounded-full animate-pulse" />
-            <span className="text-orange-300 text-sm font-medium tracking-wide">Empowering communities through volunteering</span>
+            <span className="text-orange-300 text-sm font-medium tracking-wide">{t('hero.badge')}</span>
           </div>
 
           {/* Headline */}
           <h1 className="text-5xl sm:text-6xl lg:text-7xl font-extrabold text-white mb-6 leading-[1.1] tracking-tight">
-            Volunteer.<br />
-            <span className="text-green-400">Connect.</span><br />
-            <span className="text-blue-400">Transform.</span>
+            {t('hero.word1')}<br />
+            <span className="text-green-400">{t('hero.word2')}</span><br />
+            <span className="text-blue-400">{t('hero.word3')}</span>
           </h1>
 
           <p className="text-lg sm:text-xl text-white/75 mb-10 leading-relaxed max-w-xl">
-            Join a growing movement of changemakers. Find verified volunteer opportunities, build your impact portfolio, and earn recognition for your service.
+            {t('hero.subtitle')}
           </p>
 
           {/* CTAs */}
@@ -92,14 +94,14 @@ const HeroSection: React.FC<HeroSectionProps> = ({ onGetStarted, onRegisterNGO, 
               onClick={onStartVolunteering ?? onGetStarted}
               className="group px-8 py-4 bg-orange-500 hover:bg-orange-400 text-white font-semibold rounded-xl transition-all shadow-lg shadow-orange-500/30 flex items-center justify-center gap-2"
             >
-              {isAuthenticated ? 'Browse Opportunities' : 'Volunteer'}
+              {isAuthenticated ? t('hero.browse') : t('hero.volunteer')}
               <ChevronRightIcon size={20} className="group-hover:translate-x-1 transition-transform" />
             </button>
             <button
               onClick={onRegisterNGO}
               className="px-8 py-4 bg-white/10 backdrop-blur-sm text-white font-semibold rounded-xl border border-white/25 hover:bg-white/20 transition-all flex items-center justify-center gap-2"
             >
-              Post Opportunities
+              {t('hero.ctaOrg')}
             </button>
           </div>
 

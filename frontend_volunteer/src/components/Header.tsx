@@ -25,7 +25,7 @@ interface HeaderProps {
 
 const Header: React.FC<HeaderProps> = ({ currentView, onNavigate, onGetStarted }) => {
   const { user, isAuthenticated, logout, loading: authLoading } = useAuth();
-  const { language, setLanguage } = useLanguage();
+  const { language, setLanguage, t } = useLanguage();
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -37,15 +37,15 @@ const Header: React.FC<HeaderProps> = ({ currentView, onNavigate, onGetStarted }
   }, []);
 
   const navLinks = [
-    { id: 'opportunities', label: 'Opportunities', href: '/opportunities' },
-    { id: 'communities', label: 'Communities', href: '/communities' },
+    { id: 'opportunities', label: t('nav.opportunities'), href: '/opportunities' },
+    { id: 'communities', label: t('nav.communities'), href: '/communities' },
   ];
 
   const dashboardLink = user?.role === 'admin'
-    ? { id: 'admin-dashboard', label: 'Admin Panel', icon: ShieldCheckIcon, href: '/admin-dashboard' }
+    ? { id: 'admin-dashboard', label: t('nav.adminPanel'), icon: ShieldCheckIcon, href: '/admin-dashboard' }
     : user?.role === 'organizer'
-    ? { id: 'organizer-dashboard', label: 'Dashboard', icon: BuildingIcon, href: '/organizer-dashboard' }
-    : { id: 'volunteer-dashboard', label: 'My Impact', icon: TrophyIcon, href: '/volunteer-dashboard' };
+    ? { id: 'organizer-dashboard', label: t('nav.dashboard'), icon: BuildingIcon, href: '/organizer-dashboard' }
+    : { id: 'volunteer-dashboard', label: t('nav.impact'), icon: TrophyIcon, href: '/volunteer-dashboard' };
 
   const isActive = (id: string) => currentView === id;
 
@@ -152,9 +152,9 @@ const Header: React.FC<HeaderProps> = ({ currentView, onNavigate, onGetStarted }
                           </div>
                           <div className="py-1.5">
                             {[
-                              { label: 'My Profile', icon: UsersIcon, href: '/profile' },
-                              { label: 'My Opportunities', icon: Calendar, href: '/my-opportunities' },
-                              { label: 'Settings', icon: SettingsIcon, href: '/settings' },
+                              { label: t('nav.myProfile'), icon: UsersIcon, href: '/profile' },
+                              { label: t('nav.myOpportunities'), icon: Calendar, href: '/my-opportunities' },
+                              { label: t('nav.settings'), icon: SettingsIcon, href: '/settings' },
                             ].map((item) => (
                               <button
                                 key={item.label}
@@ -171,7 +171,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, onNavigate, onGetStarted }
                                 className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
                               >
                                 <LogOutIcon size={16} />
-                                Sign Out
+                                {t('nav.signOut')}
                               </button>
                             </div>
                           </div>
@@ -186,13 +186,13 @@ const Header: React.FC<HeaderProps> = ({ currentView, onNavigate, onGetStarted }
                     onClick={() => (window.location.href = '/login')}
                     className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
                   >
-                    Sign In
+                    {t('nav.signIn')}
                   </button>
                   <button
                     onClick={() => onGetStarted?.()}
                     className="px-4 py-2 text-sm font-semibold bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-colors shadow-sm"
                   >
-                    Get Started
+                    {t('nav.getStarted')}
                   </button>
                 </div>
               )}
@@ -230,19 +230,42 @@ const Header: React.FC<HeaderProps> = ({ currentView, onNavigate, onGetStarted }
                 {dashboardLink.label}
               </button>
             )}
+
+            {/* Language toggle — mobile */}
+            <div className="flex items-center gap-2 px-4 py-3 border-t border-gray-100 mt-1">
+              <GlobeIcon size={15} className="text-gray-400" />
+              <button
+                onClick={() => setLanguage('en')}
+                className={`text-sm font-semibold px-3 py-1 rounded-lg transition-colors ${
+                  language === 'en' ? 'bg-orange-50 text-orange-600' : 'text-gray-500 hover:text-gray-800'
+                }`}
+              >
+                EN
+              </button>
+              <span className="text-gray-300 text-sm">|</span>
+              <button
+                onClick={() => setLanguage('fr')}
+                className={`text-sm font-semibold px-3 py-1 rounded-lg transition-colors ${
+                  language === 'fr' ? 'bg-orange-50 text-orange-600' : 'text-gray-500 hover:text-gray-800'
+                }`}
+              >
+                FR
+              </button>
+            </div>
+
             {!isAuthenticated && (
-              <div className="pt-3 border-t border-gray-100 space-y-2">
+              <div className="pt-2 border-t border-gray-100 space-y-2">
                 <button
                   onClick={() => { window.location.href = '/login'; setShowMobileMenu(false); }}
                   className="w-full py-3 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-xl transition-colors"
                 >
-                  Sign In
+                  {t('nav.signIn')}
                 </button>
                 <button
                   onClick={() => { onGetStarted?.(); setShowMobileMenu(false); }}
                   className="w-full py-3 text-sm font-semibold bg-orange-500 text-white rounded-xl hover:bg-orange-600 transition-colors"
                 >
-                  Get Started
+                  {t('nav.getStarted')}
                 </button>
               </div>
             )}

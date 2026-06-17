@@ -8,6 +8,7 @@ import { Switch } from '@/components/ui/switch';
 import { Eye, EyeOff, Loader2, CheckCircle, Lock, Bell, Shield, Trash2, LogOut, Globe, Palette } from 'lucide-react';
 import { authAPI } from '@/lib/api';
 import { useAuth } from '@/contexts/NewAuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '@/components/DashboardLayout';
@@ -19,6 +20,7 @@ const Settings: React.FC = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
   const { user, logout, refreshUser } = useAuth();
+  const { language, setLanguage } = useLanguage();
   const [activeTab, setActiveTab] = useState<Tab>('security');
 
   // ── Password ──────────────────────────────────────────────────────────────
@@ -52,9 +54,6 @@ const Settings: React.FC = () => {
     allowCertVerification: true,
   });
 
-  // ── Language ──────────────────────────────────────────────────────────────
-  const [language, setLanguage] = useState(user?.preferences?.language || 'en');
-
   // ── Branding (org only) ───────────────────────────────────────────────────
   const isOrg = (user as any)?.userType === 'organization' || user?.role === 'organizer';
   const [brandColor, setBrandColor] = useState((user as any)?.organizationBrandColor || '#f97316');
@@ -83,7 +82,7 @@ const Settings: React.FC = () => {
         communityUpdates: user.preferences?.communityUpdates ?? true,
         badgeAlerts: user.preferences?.badgeAlerts ?? true,
       }));
-      setLanguage(user.preferences?.language || 'en');
+      setLanguage((user.preferences?.language as 'en' | 'fr') || 'en');
       if (user.preferences?.privacy) {
         setPrivacyPrefs({
           showProfileToOrgs: user.preferences.privacy.showProfileToOrgs ?? true,
@@ -326,7 +325,7 @@ const Settings: React.FC = () => {
               </CardHeader>
               <CardContent>
                 <div className="flex gap-3">
-                  {[{ value: 'en', label: 'English' }, { value: 'fr', label: 'Français' }].map(lang => (
+                  {([{ value: 'en', label: 'English' }, { value: 'fr', label: 'Français' }] as { value: 'en' | 'fr'; label: string }[]).map(lang => (
                     <button key={lang.value} onClick={() => setLanguage(lang.value)}
                       className={`flex-1 py-2.5 rounded-xl border-2 text-sm font-medium transition-all ${
                         language === lang.value ? 'border-orange-500 bg-orange-50 text-orange-700' : 'border-gray-200 text-gray-600 hover:border-gray-300'
